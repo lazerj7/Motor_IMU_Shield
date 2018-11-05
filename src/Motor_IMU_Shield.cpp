@@ -13,7 +13,7 @@
 /*****************
  * Read Function *
  *****************/
-uint16_t registerRead(uint16_t addr) {
+uint16_t Motor::registerRead(uint16_t addr) {
 	_outputBuffer = addr << 13;
 	SPI.begin();
         SPI.beginTransaction(SPI_SETTINGS);
@@ -35,8 +35,10 @@ uint16_t registerRead(uint16_t addr) {
 /******************
  * Write Function *
  ******************/
-void registerWrite(uint16_t addr, uint16_t data) {
+void Motor::registerWrite(uint16_t addr, uint16_t data) {
+	Serial.print("Write: ");
 	_outputBuffer = (addr << 13) | 0x1000 | data;
+	Serial.println(_outputBuffer, BIN);
 	SPI.begin();
 	SPI.beginTransaction(SPI_SETTINGS);
 	PORTD &= ~_portMask;
@@ -49,7 +51,7 @@ void registerWrite(uint16_t addr, uint16_t data) {
 /***************
  * Error Check *
  ***************/
-boolean faultCheck() {
+boolean Motor::faultCheck() {
 	if (_registers.fault) {
 	return true;
 	}
@@ -94,7 +96,7 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 	_registers.conf3 = registerRead(A4963_CONF3);
 	_registers.conf4 = registerRead(A4963_CONF4);
 	_registers.conf5 = registerRead(A4963_CONF5);
-	_registers.run = _read(A4963_RUN);
+	_registers.run = registerRead(A4963_RUN);
 	//Check for error during reads
 	//We expect a POR flag, so ignore it but any other flag
 	//should be treated as an actual error
@@ -115,10 +117,11 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 	else if (maxCurrent < 2.5) {
 		maxCurrent = 2.5;
 	}
-	
+		
 	_registers.conf1 &= 0xFC3F; 
-	_registers.conf1 |= ( ( (uint16_t) ( ( (maxCurrent * 0.005) / 12.5 ) - 1.0 ) ) << 6 );
-	registerWrite(A4963_CONF1, _outputBuffer);
+	_registers.conf1 |= ( ( (uint16_t) round( ( ( (maxCurrent * 0.005) / 0.0125 ) - 1.0 ) ) << 6 ) );
+	
+	registerWrite(A4963_CONF1, _registers.conf1);
 	if (faultCheck()) {
 		//TODO error handling
 	}
@@ -131,7 +134,7 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 		maxSpeed = (uint16_t) ( 196602.0 / (double) numPoles );
 	}
 	
-	_registers.conf5 &= 0xFF8F
+	_registers.conf5 &= 0xFF8F;
 	_registers.conf5 |= ( (uint16_t) ( round( (log( ( ( ((double) numPoles * (double) maxSpeed) / 6.0 ) + 1.0 ) ) / log(2.0) ) - 8.0 ) ) ) << 4;
 	registerWrite(A4963_CONF5, _registers.conf5);
 	if (faultCheck()) {
@@ -171,7 +174,7 @@ boolean Motor::setSpeed(uint8_t speed) {
 		speed = 7;
 	}
 
-	_registers.run &= 0xFE0B
+	_registers.run &= 0xFE0B;
 	_registers.run |= 0x0001 | ( (uint16_t) ( (speed - 7) / 3 ) ) << 4;
 	registerWrite(A4963_RUN, _registers.run);
 	if (faultCheck()) {
@@ -185,7 +188,7 @@ boolean Motor::setSpeed(uint8_t speed) {
  * Get Motor Speed *
  *******************/
 int Motor::getSpeed() {
-	_registers.run = readRegister(A4963_RUN);
+	_registers.run = registerRead(A4963_RUN);
 	if (faultCheck()) {
 		//TODO error handling
 	}
@@ -195,7 +198,7 @@ int Motor::getSpeed() {
 /***********************
  * Set Motor Direction *
  ***********************/
-boolean setDirection(uint8_t dir) {
+boolean Motor::setDirection(uint8_t dir) {
 	_registers.run &= 0xFFFD;
 	_registers.run |= dir << 1;
 	registerWrite(A4963_RUN, _registers.run);
@@ -208,7 +211,7 @@ boolean setDirection(uint8_t dir) {
 /********************************
  * Restart Motor After Coasting *
  ********************************/
-boolean restart() {
+boolean Motor::restart() {
 	_registers.run |= 0x0001;
 	registerWrite(A4963_RUN, _registers.run);
 	if (faultCheck()) {
@@ -221,7 +224,7 @@ boolean restart() {
 /***************
  * Coast Motor *
  ***************/
-boolean coast() {
+boolean Motor::coast() {
 	_registers.run &= 0xFFFE;
 	registerWrite(A4963_RUN, _registers.run);
 	if (faultCheck()) {
@@ -236,9 +239,9 @@ boolean coast() {
  * (Sets speed to zero to Brake. Restart will Not Work After Brake. *
  *  Must call setSpeed to restart motor.)                           *
  ********************************************************************/
-boolean brake() {
+boolean Motor::brake() {
 	_registers.run &= 0xFFFE;
-	_register.run |= 0x0001;
+	_registers.run |= 0x0001;
 	registerWrite(A4963_RUN, _registers.run);
 	if (faultCheck()) {
 		//TODO error handling

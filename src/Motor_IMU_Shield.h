@@ -61,7 +61,7 @@ class Motor{
 		uint16_t _outputBuffer;
 		uint16_t _inputBuffer;
 		uint8_t _portMask;
-		struct _registers {
+		struct registers {
 			uint16_t fault;
 			uint16_t conf0;
 			uint16_t conf1;
@@ -70,7 +70,7 @@ class Motor{
 			uint16_t conf4;
 			uint16_t conf5;
 			uint16_t run;
-		}
+		} _registers;
 };
 
 #endif
