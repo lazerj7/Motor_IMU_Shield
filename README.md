@@ -11,7 +11,17 @@ Motor motorName(int motorTerminal, [float maxCurrent], [int numPoles], [int maxS
 ```
 
 Create a Motor object called motorName.
+
 motorTerminal is the only required argument and can be MOTOR_A, MOTOR_B, MOTOR_C, or MOTOR_D corresponding to which terminal the motor is plugged into on the shield.
+
 maxCurrent is an optional floating point value to specify the max current of the motor in amps. Defaults to maximum value of 20 amps if ommitted, any value greater than 20 amps defaults to 20 amps, and any value less than 2.5 amps defaults to 2.5 amps.
+
 numPoles is an optional integer value giving the number of pole pairs in the motor. This is only necessary for calculating a value for the maximum speed of the motor and is only relevent in Closed Loop Speed Mode.
+
 maxSpeed is an optional integer value representing the maximum speed of the motor in RPM. It is only relevent in Closed Loop Speed Mode.
+
+```
+motorName.setMode(int controlMode)
+```
+
+Sets Operating Mode For The Motor. Returns a boolean true if successful or false if an error occurred. Takes an argument of INDIRECT_SPEED (default value), DIRECT_SPEED, CLOSED_LOOP_CURRENT, or CLOSED_LOOP_SPEED corresponding to the desired operating mode.
