@@ -25,3 +25,61 @@ motorName.setMode(int controlMode)
 ```
 
 Sets Operating Mode For The Motor. Returns a boolean true if successful or false if an error occurred. Takes an argument of INDIRECT_SPEED (default value), DIRECT_SPEED, CLOSED_LOOP_CURRENT, or CLOSED_LOOP_SPEED corresponding to the desired operating mode.
+
+```
+motorName.setDirection(int dir)
+```
+
+Sets Rotation Direction for the motor. Returns a boolean true if successful or false if an error occurred. Takes an argument of FORWARD or REVERSE.
+
+```
+motorName.setSpeed(int speed)
+```
+
+Sets the Rotational speed of the motor. In non-closed-loop modes corresponds to PWM duty cycle. In closed loop modes corresponds to a percent of max speed or max current. Also disables motor brake and sets motor to run. Returns a boolean true if successful or false if an error occurred. Takes an integer corresponding to either PWM duty cylce (in percent) or percent of max speed or max current.
+
+```
+motorName.getSpeed()
+```
+
+Returns an integer representing the current speed setting of the motor. Does not take an argument.
+
+```
+motorName.coast()
+```
+
+Disables motor outputs and coasts motor. Returns boolean true if successful or false is an error occurred. Does not take an argument. Motor can be resumed at previous speed setting by calling motorName.restart() or with a different speed using motorName.setSpeed(int speed).
+
+```
+motorName.brake()
+```
+
+Sets motor speed to 0 and actively stops (brakes) motor rotation. Returns boolean true if successful or false if an error occurred. Does not take an argument. Motor cannot be resumed with motorName.restart(), must call motorName.setSpeed(int speed) in order to restart motor.
+
+```
+motorName.restart()
+```
+
+Restarts motor at previous speed setting following motorName.coast(). Returns boolean true if successful or false if an error occurred. Does not take an argument.
+
+```
+motorName.faultCheck();
+```
+
+Returns boolean true if a motor fault has been detected or false if no motor faults detected. Does not take an argument.
+
+### Advanced Library Functions
+
+NOTE: No error checking is performed in these functions. It is recommended that you call motorName.faultCheck() after a registerRead or registerWrite and implement some form of error handling.
+
+```
+motorName.registerRead(int addr)
+```
+
+Read from one of the A4963 motor controller registers. Returns the register value as an int. Registers are defined as A4963_CONF0, A4963_CONF1, A4963_CONF2, A4963_CONF3, A4963_CONF4, A4963_CONF5, A4963_FAULT, and A4963_RUN. See A4963 datasheet for more detail.
+
+```
+motorName.registerWrite(int addr, int data)
+```
+
+Write to one of the A4963 motor controller registers. No return value. Registers address defined as in registerRead, data is the data to be written to the register. See A4963 datasheet for more detail.
