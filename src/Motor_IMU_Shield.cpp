@@ -159,9 +159,10 @@ boolean Motor::setMode(uint16_t controlMode) {
 	return true;
 }
 
-/*******************
- * Set Motor Speed *
- *******************/
+/***********************************************
+ * Set Motor Speed 			       *
+ * (Also sets motor to run and disables brake) *
+ ***********************************************/
 boolean Motor::setSpeed(uint8_t speed) {
 	if (speed > 100) {
 		speed = 100;
@@ -170,8 +171,8 @@ boolean Motor::setSpeed(uint8_t speed) {
 		speed = 7;
 	}
 
-	_registers.run &= 0xFE0F
-	_registers.run |= ( (uint16_t) ( (speed - 7) / 3 ) ) << 4;
+	_registers.run &= 0xFE0B
+	_registers.run |= 0x0001 | ( (uint16_t) ( (speed - 7) / 3 ) ) << 4;
 	registerWrite(A4963_RUN, _registers.run);
 	if (faultCheck()) {
 		//TODO error handling
@@ -189,4 +190,59 @@ int Motor::getSpeed() {
 		//TODO error handling
 	}
 	return (int) ( ( 3 * ( ( _registers.run & 0x01F0 ) >> 4 ) ) + 7 );
+}
+
+/***********************
+ * Set Motor Direction *
+ ***********************/
+boolean setDirection(uint8_t dir) {
+	_registers.run &= 0xFFFD;
+	_registers.run |= dir << 1;
+	registerWrite(A4963_RUN, _registers.run);
+	if (faultCheck()) {
+		//TODO error handling
+	}
+	return true;
+}
+
+/********************************
+ * Restart Motor After Coasting *
+ ********************************/
+boolean restart() {
+	_registers.run |= 0x0001;
+	registerWrite(A4963_RUN, _registers.run);
+	if (faultCheck()) {
+		//TODO error handling
+	}
+
+	return true;
+}
+
+/***************
+ * Coast Motor *
+ ***************/
+boolean coast() {
+	_registers.run &= 0xFFFE;
+	registerWrite(A4963_RUN, _registers.run);
+	if (faultCheck()) {
+		//TODO error handling
+	}
+	
+	return true;
+}
+
+/********************************************************************
+ * Brake Motor                                                      *
+ * (Sets speed to zero to Brake. Restart will Not Work After Brake. *
+ *  Must call setSpeed to restart motor.)                           *
+ ********************************************************************/
+boolean brake() {
+	_registers.run &= 0xFFFE;
+	_register.run |= 0x0001;
+	registerWrite(A4963_RUN, _registers.run);
+	if (faultCheck()) {
+		//TODO error handling
+	}
+
+	return true;
 }

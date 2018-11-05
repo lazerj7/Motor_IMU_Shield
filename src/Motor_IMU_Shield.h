@@ -53,9 +53,8 @@ class Motor{
 		boolean setMode(uint16_t controlMode);
 		boolean setSpeed(uint8_t speed);
 		int getSpeed();
-		//TODO the rest of these
 		boolean setDirection(uint8_t dir);
-		boolean start();
+		boolean restart();
 		boolean coast();
 		boolean brake();
 	private:
