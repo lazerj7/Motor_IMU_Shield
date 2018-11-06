@@ -57,10 +57,12 @@ class Motor{
 		boolean restart();
 		boolean coast();
 		boolean brake();
+		static void faultInterrupt();
 	private:
 		uint16_t _outputBuffer;
 		uint16_t _inputBuffer;
-		uint8_t _portMask;
+		uint8_t _cs;
+		uint8_t _i;
 		struct registers {
 			uint16_t fault;
 			uint16_t conf0;
@@ -71,6 +73,6 @@ class Motor{
 			uint16_t conf5;
 			uint16_t run;
 		} _registers;
+		static Motor* _motors[4];
 };
-
 #endif

@@ -10,6 +10,9 @@
 
 #define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
 
+//Because c++ is dumb
+Motor* Motor::_motors[4] = {NULL, NULL, NULL, NULL};
+
 /*****************
  * Read Function *
  *****************/
@@ -17,15 +20,15 @@ uint16_t Motor::registerRead(uint16_t addr) {
 	_outputBuffer = addr << 13;
 	SPI.begin();
         SPI.beginTransaction(SPI_SETTINGS);
-        PORTD &= ~_portMask;
+        digitalWrite(_cs, LOW);
         _inputBuffer = SPI.transfer16(_outputBuffer);
-        PORTD |= _portMask;
+        digitalWrite(_cs, HIGH);
 	//Check for error and store faults if present
 	//Faults must be cleared by error handler or else will remain
 	if (_inputBuffer >> 15) {
-		PORTD &= ~_portMask;
+		digitalWrite(_cs, LOW);
 		_registers.fault = SPI.transfer16(A4963_FAULT << 13);
-		PORTD |= _portMask;
+		digitalWrite(_cs, HIGH);
 	}
 	SPI.endTransaction();
 	SPI.end();
@@ -41,9 +44,9 @@ void Motor::registerWrite(uint16_t addr, uint16_t data) {
 	Serial.println(_outputBuffer, BIN);
 	SPI.begin();
 	SPI.beginTransaction(SPI_SETTINGS);
-	PORTD &= ~_portMask;
+	digitalWrite(_cs, LOW);
 	_registers.fault = SPI.transfer16(_outputBuffer);
-	PORTD |= _portMask;
+	digitalWrite(_cs, HIGH);
 	SPI.endTransaction();
 	SPI.end();
 }
@@ -58,17 +61,17 @@ boolean Motor::faultCheck() {
 
 	SPI.begin();
         SPI.beginTransaction(SPI_SETTINGS);
-	PORTD &= ~_portMask;
+	digitalWrite(_cs, LOW);
 
 	if (digitalRead(MISO)) {
 		_registers.fault = SPI.transfer16(A4963_FAULT << 13);
-		PORTD |= _portMask;
+		digitalWrite(_cs, HIGH);
 		SPI.endTransaction();
 		SPI.end();
 		return true;
 	}
 
-	PORTD |= _portMask;
+	digitalWrite(_cs, HIGH);
 	SPI.endTransaction();
 	SPI.end();
 	_registers.fault = 0x0000;
@@ -79,13 +82,29 @@ boolean Motor::faultCheck() {
  * Motor Constructor *
  *********************/
 Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
-	pinMode(motorTerminal, OUTPUT);
-	digitalWrite(motorTerminal, HIGH);
+	//if first instance
+	if (&_motors[0] == NULL && &_motors[1] == NULL && &_motors[2] == NULL && &_motors[3] == NULL) {
+		attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+	}
+	
+	_cs = motorTerminal;
+	/*switch(_cs) {
+		case 3:
+			_motors[0] = this;
+			break;
+		case 4:
+			_motors[1] = this;
+			break;
+		case 5:
+			_motors[2] = this;
+			break;
+		case 6:
+			_motors[3] = this;
+			break;
+	}*/
 
-	/**********************************
-	 * Set Mask For Port Manipulation *
-	 **********************************/
-	_portMask = (0x01 << motorTerminal);
+	pinMode(_cs, OUTPUT);
+	digitalWrite(_cs, HIGH);
 
 	/**********************
 	 * Get Current Config *
@@ -248,4 +267,11 @@ boolean Motor::brake() {
 	}
 
 	return true;
+}
+
+/*******************
+ * Fault Interrupt *
+ *******************/
+void Motor::faultInterrupt() {
+	//TODO fault interrupt
 }
