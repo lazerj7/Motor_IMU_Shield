@@ -4,7 +4,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
 
 ## Using The Library
 
-### 1. 1. Library Functions
+### Library Functions
 
 
 ```cpp
@@ -90,7 +90,7 @@ Returns boolean true if a motor fault has been detected or false if no motor fau
 
 Does not take an argument.
 
-### 1. 2. Advanced Library Functions
+### Advanced Library Functions
 
 NOTE: No error checking is performed in these functions. It is recommended that you call motorName.faultCheck() after a registerRead or registerWrite and implement some form of error handling.
 
