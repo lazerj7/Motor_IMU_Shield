@@ -71,18 +71,6 @@ Does not take an argument.
 NOTE: Motor can be resumed at previous speed setting by calling motorName.restart() or with a different speed using motorName.setSpeed(int speed).
 
 ```
-motorName.brake()
-```
-
-Sets motor speed to 0 and actively stops (brakes) motor rotation.
-
-Returns boolean true if successful or false if an error occurred.
-
-Does not take an argument.
-
-NOTE: Motor cannot be resumed with motorName.restart(), must call motorName.setSpeed(int speed) in order to restart motor.
-
-```
 motorName.restart()
 ```
 
