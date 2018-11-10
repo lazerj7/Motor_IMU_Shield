@@ -47,6 +47,7 @@
 class Motor{
 	public:
 		Motor(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint16_t maxSpeed = 32767);
+		~Motor();
 		uint16_t registerRead(uint16_t addr);
                 void registerWrite(uint16_t addr, uint16_t data);
                 boolean faultCheck();
@@ -56,13 +57,12 @@ class Motor{
 		boolean setDirection(uint8_t dir);
 		boolean restart();
 		boolean coast();
-		boolean brake();
 		static void faultInterrupt();
 	private:
+		static void badTerminal()  __attribute__((error("Invalid Motor Terminal!")));
 		uint16_t _outputBuffer;
 		uint16_t _inputBuffer;
 		uint8_t _cs;
-		uint8_t _i;
 		struct registers {
 			uint16_t fault;
 			uint16_t conf0;

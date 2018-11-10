@@ -10,7 +10,7 @@
 
 #define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
 
-//Because c++ is dumb
+//Initialize array of object pointers
 Motor* Motor::_motors[4] = {NULL, NULL, NULL, NULL};
 
 /*****************
@@ -18,7 +18,6 @@ Motor* Motor::_motors[4] = {NULL, NULL, NULL, NULL};
  *****************/
 uint16_t Motor::registerRead(uint16_t addr) {
 	_outputBuffer = addr << 13;
-	SPI.begin();
         SPI.beginTransaction(SPI_SETTINGS);
         digitalWrite(_cs, LOW);
         _inputBuffer = SPI.transfer16(_outputBuffer);
@@ -31,7 +30,6 @@ uint16_t Motor::registerRead(uint16_t addr) {
 		digitalWrite(_cs, HIGH);
 	}
 	SPI.endTransaction();
-	SPI.end();
 	return (_inputBuffer & 0x0FFF);
 }
 
@@ -42,13 +40,11 @@ void Motor::registerWrite(uint16_t addr, uint16_t data) {
 	Serial.print("Write: ");
 	_outputBuffer = (addr << 13) | 0x1000 | data;
 	Serial.println(_outputBuffer, BIN);
-	SPI.begin();
 	SPI.beginTransaction(SPI_SETTINGS);
 	digitalWrite(_cs, LOW);
 	_registers.fault = SPI.transfer16(_outputBuffer);
 	digitalWrite(_cs, HIGH);
 	SPI.endTransaction();
-	SPI.end();
 }
 
 /***************
@@ -59,7 +55,6 @@ boolean Motor::faultCheck() {
 	return true;
 	}
 
-	SPI.begin();
         SPI.beginTransaction(SPI_SETTINGS);
 	digitalWrite(_cs, LOW);
 
@@ -67,13 +62,11 @@ boolean Motor::faultCheck() {
 		_registers.fault = SPI.transfer16(A4963_FAULT << 13);
 		digitalWrite(_cs, HIGH);
 		SPI.endTransaction();
-		SPI.end();
 		return true;
 	}
 
 	digitalWrite(_cs, HIGH);
 	SPI.endTransaction();
-	SPI.end();
 	_registers.fault = 0x0000;
 	return false;
 }
@@ -82,26 +75,32 @@ boolean Motor::faultCheck() {
  * Motor Constructor *
  *********************/
 Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
-	//if first instance
-	if (&_motors[0] == NULL && &_motors[1] == NULL && &_motors[2] == NULL && &_motors[3] == NULL) {
-		attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
-	}
-	
+	if (motorTerminal != MOTOR_A && motorTerminal != MOTOR_B && motorTerminal != MOTOR_C && motorTerminal != MOTOR_D) {
+                badTerminal();
+        }
+        
+        //if first instance
+        if (&_motors[0] == NULL && &_motors[1] == NULL && &_motors[2] == NULL && &_motors[3] == NULL) {
+                SPI.usingInterrupt(digitalPinToInterrupt(2));
+                attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+        SPI.begin();
+        }
+
 	_cs = motorTerminal;
-	/*switch(_cs) {
-		case 3:
+	switch(_cs) {
+		case MOTOR_A:
 			_motors[0] = this;
 			break;
-		case 4:
+		case MOTOR_B:
 			_motors[1] = this;
 			break;
-		case 5:
+		case MOTOR_C:
 			_motors[2] = this;
 			break;
-		case 6:
+		case MOTOR_D:
 			_motors[3] = this;
 			break;
-	}*/
+	}
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH);
@@ -253,20 +252,28 @@ boolean Motor::coast() {
 	return true;
 }
 
-/********************************************************************
- * Brake Motor                                                      *
- * (Sets speed to zero to Brake. Restart will Not Work After Brake. *
- *  Must call setSpeed to restart motor.)                           *
- ********************************************************************/
-boolean Motor::brake() {
-	_registers.run &= 0xFFFE;
-	_registers.run |= 0x0001;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
+/**************
+ * Destructor *
+ **************/
+Motor::~Motor() {
+	switch(_cs) {
+                case MOTOR_A:
+                        _motors[0] = NULL;
+                        break;
+                case MOTOR_B:
+                        _motors[1] = NULL;
+                        break;
+                case MOTOR_C:
+                        _motors[2] = NULL;
+                        break;
+                case MOTOR_D:
+                        _motors[3] = NULL;
+                        break;
+        }
+	if (_motors[0] == NULL && _motors[1] == NULL && _motors[2] == NULL && _motors[3] == NULL) {
+		SPI.end();
+		detachInterrupt(digitalPinToInterrupt(2));
 	}
-
-	return true;
 }
 
 /*******************
