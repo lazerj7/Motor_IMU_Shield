@@ -6,7 +6,8 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
 
 ### Library Functions
 
-```
+*
+```cpp
 Motor motorName(int motorTerminal, [float maxCurrent], [int numPoles], [int maxSpeed])
 ```
 
@@ -20,7 +21,8 @@ numPoles is an optional integer value giving the number of pole pairs in the mot
 
 maxSpeed is an optional integer value representing the maximum speed of the motor in RPM. It is only relevent in Closed Loop Speed Mode.
 
-```
+*
+```cpp
 motorName.setMode(int controlMode)
 ```
 
@@ -30,7 +32,8 @@ Returns a boolean true if successful or false if an error occurred.
 
 Takes an argument of INDIRECT_SPEED (default value), DIRECT_SPEED, CLOSED_LOOP_CURRENT, or CLOSED_LOOP_SPEED corresponding to the desired operating mode.
 
-```
+*
+```cpp
 motorName.setDirection(int dir)
 ```
 
@@ -40,7 +43,8 @@ Returns a boolean true if successful or false if an error occurred.
 
 Takes an argument of FORWARD or REVERSE.
 
-```
+*
+```cpp
 motorName.setSpeed(int speed)
 ```
 
@@ -50,7 +54,8 @@ Returns a boolean true if successful or false if an error occurred.
 
 Takes an integer corresponding to either PWM duty cylce (in percent) or percent of max speed or max current.
 
-```
+*
+```cpp
 motorName.getSpeed()
 ```
 
@@ -58,7 +63,8 @@ Returns an integer representing the current speed setting of the motor.
 
 Does not take an argument.
 
-```
+*
+```cpp
 motorName.coast()
 ```
 
@@ -70,7 +76,8 @@ Does not take an argument.
 
 NOTE: Motor can be resumed at previous speed setting by calling motorName.restart() or with a different speed using motorName.setSpeed(int speed).
 
-```
+*
+```cpp
 motorName.restart()
 ```
 
@@ -80,7 +87,8 @@ Returns boolean true if successful or false if an error occurred.
 
 Does not take an argument.
 
-```
+*
+```cpp
 motorName.faultCheck();
 ```
 
@@ -92,7 +100,8 @@ Does not take an argument.
 
 NOTE: No error checking is performed in these functions. It is recommended that you call motorName.faultCheck() after a registerRead or registerWrite and implement some form of error handling.
 
-```
+*
+```cpp
 motorName.registerRead(int addr)
 ```
 
@@ -104,7 +113,8 @@ Registers are defined as A4963_CONF0, A4963_CONF1, A4963_CONF2, A4963_CONF3, A49
 
 See A4963 datasheet for more detail on registers.
 
-```
+*
+```cpp
 motorName.registerWrite(int addr, int data)
 ```
 
