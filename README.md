@@ -115,4 +115,5 @@ Write to one of the A4963 motor controller registers.
 No return value.
 
 Register addresses defined as in registerRead, data is the data to be written to the register.
+
 See A4963 datasheet for more detail on registers.
