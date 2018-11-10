@@ -6,8 +6,8 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
 
 ### Library Functions
 
-*
-```cpp
+
+*```cpp
 Motor motorName(int motorTerminal, [float maxCurrent], [int numPoles], [int maxSpeed])
 ```
 
