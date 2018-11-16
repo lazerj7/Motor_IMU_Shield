@@ -721,7 +721,7 @@ void IMU::update() {
         if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-        if (Wire.requestFrom((int) _instance->_addr, 45, 1) != 45) {
+        if (Wire.requestFrom((int) _instance->_addr, 46, 1) != 46) {
 		//TODO error handling
 	}
 
