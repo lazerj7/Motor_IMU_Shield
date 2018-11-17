@@ -301,7 +301,7 @@ void Motor::faultInterrupt() {
 /*******************
  * IMU Constructor *
  *******************/
-IMU::IMU (uint8_t addr, boolean serial) {
+IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	//check addr
 	if(addr != JUMPERED && addr != NOT_JUMPERED) {
 		badAddress();
@@ -339,40 +339,60 @@ IMU::IMU (uint8_t addr, boolean serial) {
 	_page = Wire.read();
 	}
 
-	//get current operating mode
-	_mode = registerRead(0x00, 0x3D);
+	//Set Normal Power Mode
+	registerWrite(0x00, 0x3E, 0x00);
+	
+	//enter config mode (should be default but just in case...)
+	registerWrite(0x00, 0x3D, 0x00);
+
+	//self test
+	registerWrite(0x00, 0x3F, 0x01);
+	delayMicroseconds(50);
+	if (registerRead(0x00, 0x36) != 0x0F) {
+		//TODO error handling
+	}
+
+	//set units to celsius for temp, degrees for angles, m/s^2 for acceleration
+	registerWrite(0x00, 0x3B, 0x00);
+
+	//disable interrupts (since interrupt pin isn't connected)
+	registerWrite(0x01, 0x10, 0x00);
+	registerWrite(0x01, 0x0F, 0x00);
+
+	//Set axis to defaults (again, just in case...)
+	registerWrite(0x00, 0x42, 0x00);
+	registerWrite(0x00, 0x41, 0x24);
 
 	//Set Up Timer2 Interrupt to read orientation data at ~100Hz
-	_noInt = 1;
 	uint8_t compare;
 	uint8_t prescaler;
-	if (F_CPU/100 < 256) {
-		prescaler = 0x01;
-		compare = (uint8_t) F_CPU/100;
-		_noInt = 0;
-	}
-	else if (F_CPU/800 < 256) {
-		prescaler = 0x02;
-		compare = (uint8_t) F_CPU/800;
-		_noInt = 0;
-	}
-	else if (F_CPU/6400 < 256) {
-		prescaler = 0x03;
-		compare = (uint8_t) F_CPU/6400;
-		_noInt = 0;
-	}
-	else if (F_CPU/25600 < 256) {
-		prescaler = 0x04;
-		compare = (uint8_t) F_CPU/25600;
-		_noInt = 0;
-	}
-	else if (F_CPU/102400 < 256) {
-		prescaler = 0x05;
-		compare = (uint8_t) F_CPU/102400;
-		_noInt = 0;
+	if (interrupt) {
+		if (F_CPU/100 < 256) {
+			prescaler = 0x01;
+			compare = (uint8_t) F_CPU/100;
+		}
+		else if (F_CPU/800 < 256) {
+			prescaler = 0x02;
+			compare = (uint8_t) F_CPU/800;
+		}
+		else if (F_CPU/6400 < 256) {
+			prescaler = 0x03;
+			compare = (uint8_t) F_CPU/6400;
+		}
+		else if (F_CPU/25600 < 256) {
+			prescaler = 0x04;
+			compare = (uint8_t) F_CPU/25600;
+		}
+		else if (F_CPU/102400 < 256) {
+			prescaler = 0x05;
+			compare = (uint8_t) F_CPU/102400;
+		}
+		else {
+			interrupt = false;
+		}
 	}
 
-	if (!_noInt) {
+	if (interrupt) {
 		noInterrupts();
 		TCCR2A = 0;
 		TCCR2B = 0;
@@ -380,7 +400,7 @@ IMU::IMU (uint8_t addr, boolean serial) {
 		OCR2A = compare;
 		TCCR2B |= (1 << WGM12); //Set CTC Mode
 		TCCR2B |= (prescaler << CS10); //Set Prescaler
-		TIMSK2 |= (1 << OCIE2A); //Enable Timer Compare Interrupt
+		TIMSK2 |= (1 << OCIE2A); //Enable Timer Compare Interrupt	
 		interrupts();
 	}
 }
@@ -818,9 +838,9 @@ void IMU::update() {
 	_instance->temperature = (msb << 8) | lsb;
 }
 
-/**********************************************
- * Timer Interrupt Handler To Update IMU Data *
- **********************************************/
+/**************************************
+ * Timer Interrupt To Update IMU Data *
+ **************************************/
 ISR(TIMER2_COMPA_vect) {
 	IMU::update();
 }

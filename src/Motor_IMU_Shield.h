@@ -106,7 +106,7 @@ class Motor{
 
 class IMU {
 	public:
-		IMU(uint8_t addr, boolean serial = false);
+		IMU(uint8_t addr, boolean serial = false, boolean interrupt = true);
 		~IMU();
 		uint8_t registerRead(uint8_t page, uint8_t reg);
 		void registerWrite(uint8_t page, uint8_t reg, uint8_t value);
@@ -133,42 +133,43 @@ class IMU {
 			uint16_t accXOffset;
 		} calibration;
 		struct acc {
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
 		} accelerometer;
 		struct mag {
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
 		} magnetometer;
 		struct gyr {
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
 		} gyroscope;
 		struct eul {
-			uint16_t yaw;
-			uint16_t roll;
-			uint16_t pitch;
+			volatile uint16_t yaw;
+			volatile uint16_t roll;
+			volatile uint16_t pitch;
 		} euler;
 		struct qua {
-			uint16_t w;
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
+			volatile uint16_t w;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
 		} quaternion;
 		struct linacc {
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
-		} linearAcceleration;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
+		};
+	       	linacc linearAcceleration;
 		struct grav {
-			uint16_t x;
-			uint16_t y;
-			uint16_t z;
+			volatile uint16_t x;
+			volatile uint16_t y;
+			volatile uint16_t z;
 		} gravityVector;
-		uint16_t temperature;
+		volatile uint16_t temperature;
 	private:
 		static void badAddress()  __attribute__((error("Invalid IMU Address!")));
 		static IMU* _instance;
