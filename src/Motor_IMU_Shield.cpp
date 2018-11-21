@@ -10,12 +10,13 @@
 
 #define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
 #define I2C_CLK 400000
+#define IMU_INTERRUPT_FREQUENCY 100
 
 //Initialize array of object pointers
-Motor* Motor::_motors[4] = {NULL, NULL, NULL, NULL};
+Motor* Motor::_motors[4] = {nullptr, nullptr, nullptr, nullptr};
 
 //Initialize IMU instance
-IMU* IMU::_instance = NULL;
+IMU* IMU::_instance = nullptr;
 
 /***********************
  * Motor Read Function *
@@ -42,7 +43,6 @@ uint16_t Motor::registerRead(uint16_t addr) {
  ************************/
 void Motor::registerWrite(uint16_t addr, uint16_t data) {
 	_outputBuffer = (addr << 13) | 0x1000 | data;
-	Serial.println(_outputBuffer, BIN);
 	SPI.beginTransaction(SPI_SETTINGS);
 	digitalWrite(_cs, LOW);
 	_registers.fault = SPI.transfer16(_outputBuffer);
@@ -83,11 +83,11 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
         }
         
         //if first instance
-        if (&_motors[0] == NULL && &_motors[1] == NULL && &_motors[2] == NULL && &_motors[3] == NULL) {
+        if (_motors[0] == nullptr && _motors[1] == nullptr && _motors[2] == nullptr && _motors[3] == nullptr) {
                 SPI.usingInterrupt(digitalPinToInterrupt(2));
                 attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
-        SPI.begin();
-        }
+        	SPI.begin();
+       }
 
 	_cs = motorTerminal;
 	switch(_cs) {
@@ -273,19 +273,19 @@ boolean Motor::coast() {
 Motor::~Motor() {
 	switch(_cs) {
                 case MOTOR_A:
-                        _motors[0] = NULL;
+                        _motors[0] = nullptr;
                         break;
                 case MOTOR_B:
-                        _motors[1] = NULL;
+                        _motors[1] = nullptr;
                         break;
                 case MOTOR_C:
-                        _motors[2] = NULL;
+                        _motors[2] = nullptr;
                         break;
                 case MOTOR_D:
-                        _motors[3] = NULL;
+                        _motors[3] = nullptr;
                         break;
         }
-	if (_motors[0] == NULL && _motors[1] == NULL && _motors[2] == NULL && _motors[3] == NULL) {
+	if (_motors[0] == nullptr && _motors[1] == nullptr && _motors[2] == nullptr && _motors[3] == nullptr) {
 		SPI.end();
 		detachInterrupt(digitalPinToInterrupt(2));
 	}
@@ -298,9 +298,14 @@ void Motor::faultInterrupt() {
 	//TODO fault interrupt
 }
 
-/*******************
- * IMU Constructor *
- *******************/
+/********************************************************************************
+ * IMU Constructor                                                              *
+ * NOTE: Confirmed Arduino Documentation is wrong. Wire.requestFrom returns the *
+ *       number of bytes REQUESTED, not the number of bytes RECIEVED. Therefore *
+ *       it is not useful to test this return value. Code amended, multiple     *
+ *       people have pointed this out online but Arduino doesn't seem to care   *
+ *       to fix their documentation........                                     *
+ ********************************************************************************/
 IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	//check addr
 	if(addr != JUMPERED && addr != NOT_JUMPERED) {
@@ -308,7 +313,7 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	}
 
 	//delete previous instance if it exists
-	if (_instance != NULL) {
+	if (_instance != nullptr) {
 		delete _instance;
 	}
 
@@ -332,7 +337,8 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-	if (Wire.requestFrom((int) _addr, 1, 1) != 1) {
+	Wire.requestFrom((int) _addr, 1, 1);
+	if (Wire.available() != 1) {
 		//TODO error handling
 	}
 	else {
@@ -367,40 +373,52 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	uint8_t compare;
 	uint8_t prescaler;
 	if (interrupt) {
-		if (F_CPU/100 < 256) {
+		if (F_CPU/(uint32_t) IMU_INTERRUPT_FREQUENCY < 256) {
 			prescaler = 0x01;
-			compare = (uint8_t) F_CPU/100;
+			compare = (uint8_t) (F_CPU/(uint32_t) IMU_INTERRUPT_FREQUENCY);
 		}
-		else if (F_CPU/800 < 256) {
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 8) < 256) {
 			prescaler = 0x02;
-			compare = (uint8_t) F_CPU/800;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 8));
 		}
-		else if (F_CPU/6400 < 256) {
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 32) < 256) {
 			prescaler = 0x03;
-			compare = (uint8_t) F_CPU/6400;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 32));
 		}
-		else if (F_CPU/25600 < 256) {
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 64) < 256) {
 			prescaler = 0x04;
-			compare = (uint8_t) F_CPU/25600;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 64));
 		}
-		else if (F_CPU/102400 < 256) {
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 128) < 256) {
 			prescaler = 0x05;
-			compare = (uint8_t) F_CPU/102400;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 128));
+		}
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 256) < 256) {
+			prescaler = 0x06;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 256));
+		}
+		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 1024) < 256) {
+			prescaler = 0x07;
+			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 1024));
 		}
 		else {
-			interrupt = false;
+			compare = 0;
 		}
 	}
 
+	if (compare == 0) {
+		interrupt = false;
+	}
+
 	if (interrupt) {
+		//configure Timer2
 		noInterrupts();
-		TCCR2A = 0;
-		TCCR2B = 0;
-		TCNT2 = 0;
-		OCR2A = compare;
-		TCCR2B |= (1 << WGM12); //Set CTC Mode
-		TCCR2B |= (prescaler << CS10); //Set Prescaler
-		TIMSK2 |= (1 << OCIE2A); //Enable Timer Compare Interrupt	
+		TCCR2A = (TCCR2A & 0x0C) | 0x02;	//Set CTC Mode
+		TCCR2B &= 0xF0;
+		TCCR2B |= prescaler;	//Set Prescaler
+		OCR2A = compare;	//Set Compare Value
+		TIMSK2 = (TIMSK2 & 0xFD) | 0x02; //Enable Timer Compare Interrupt
+		TCNT2 = 0;	//Restart Timer at 0	
 		interrupts();
 	}
 }
@@ -426,7 +444,8 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 	if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-	if (Wire.requestFrom((int) _addr, 1, 1) != 1) {
+	Wire.requestFrom((int) _addr, 1, 1);
+        if (Wire.available() != 1) {
 		//TODO error handling
 	}
 	return (uint8_t) Wire.read();
@@ -559,7 +578,8 @@ boolean IMU::calibrate() {
         	if (!Wire.endTransmission(0)) {
 			//TODO error handling
 		}
-        	if (Wire.requestFrom((int) _addr, 22, 1) != 22) {
+        	Wire.requestFrom((int) _addr, 22, 1);
+		if (Wire.available() != 22) {
 			//TODO error handling
 		}
         	for (int i = 11; i >= 0; i--) {
@@ -597,7 +617,8 @@ void IMU::saveCalibration() {
         if (!Wire.endTransmission(0)) {
                 //TODO error handling
         }
-        if (Wire.requestFrom((int) _addr, 16, 1) != 22) {
+        Wire.requestFrom((int) _addr, 16, 1);
+        if (Wire.available() != 22) {
                 //TODO error handling
         }
 
@@ -640,7 +661,8 @@ boolean IMU::restoreCalibration() {
         if (!Wire.endTransmission(0)) {
                 //TODO error handling
         }
-        if (Wire.requestFrom((int) _addr, 16, 1) != 22) {
+        Wire.requestFrom((int) _addr, 16, 1);
+        if (Wire.available() != 22) {
                 //TODO error handling
         }
 
@@ -730,18 +752,21 @@ void IMU::update() {
         Wire.beginTransmission(_instance->_addr);
         Wire.write(0x07);
         Wire.write(0x00);
-        if (!Wire.endTransmission(1)) {
+        /*if (!Wire.endTransmission(1)) {
 		//TODO error handling
 	}
 	else {
 		_instance->_page = 0x00;
-	}
+	}*/
+	Wire.endTransmission(1);
+	Wire.end();
         Wire.beginTransmission(_instance->_addr);
         Wire.write(0x08);
         if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-        if (Wire.requestFrom((int) _instance->_addr, 46, 1) != 46) {
+        Wire.requestFrom((int) _instance->_addr, 46, 1);
+        if (Wire.available() != 46) {
 		//TODO error handling
 	}
 
@@ -836,6 +861,8 @@ void IMU::update() {
 	lsb = Wire.read();
 	msb = Wire.read();
 	_instance->temperature = (msb << 8) | lsb;
+	Serial.println(micros(), DEC);
+	Serial.flush();
 }
 
 /**************************************
@@ -849,6 +876,6 @@ ISR(TIMER2_COMPA_vect) {
  * IMU Destructor *
  ******************/
 IMU::~IMU() {
-	_instance = NULL;
+	_instance = nullptr;
 	Wire.end();
 }
