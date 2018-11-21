@@ -72,6 +72,11 @@
 #define NDOF_FMC_OFF_MODE 0x0B
 #define NDOF_MODE 0x0C
 
+/***********************************
+ * Forward Declare Timer Interrupt *
+ ***********************************/
+ISR(TIMER2_COMPA_vect);
+
 class Motor{
 	public:
 		Motor(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint16_t maxSpeed = 32767);
@@ -105,6 +110,7 @@ class Motor{
 };
 
 class IMU {
+	friend void TIMER2_COMPA_vect();
 	public:
 		IMU(uint8_t addr, boolean serial = false, boolean interrupt = true);
 		~IMU();
@@ -172,6 +178,11 @@ class IMU {
 		volatile uint16_t temperature;
 	private:
 		static void badAddress()  __attribute__((error("Invalid IMU Address!")));
+		struct _interruptHelper {
+			~_interruptHelper(){
+				IMU::update();
+			};
+		};
 		static IMU* _instance;
 		uint8_t _addr;
 		uint8_t _page;

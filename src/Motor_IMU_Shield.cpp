@@ -869,7 +869,7 @@ void IMU::update() {
  * Timer Interrupt To Update IMU Data *
  **************************************/
 ISR(TIMER2_COMPA_vect) {
-	IMU::update();
+	IMU::_interruptHelper helper;
 }
 
 /******************
