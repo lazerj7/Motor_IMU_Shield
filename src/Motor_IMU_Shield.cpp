@@ -10,7 +10,7 @@
 
 #define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
 #define I2C_CLK 400000
-#define IMU_INTERRUPT_FREQUENCY 100
+#define IMU_INTERRUPT_FREQUENCY 60
 
 //Initialize array of object pointers
 Motor* Motor::_motors[4] = {nullptr, nullptr, nullptr, nullptr};
@@ -92,25 +92,25 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 	_cs = motorTerminal;
 	switch(_cs) {
 		case MOTOR_A:
-			if (&_motors[0] != NULL) {
+			if (_motors[0] != nullptr) {
 				delete _motors[0];
 			}
 			_motors[0] = this;
 			break;
 		case MOTOR_B:
-			if (&_motors[1] != NULL) {
+			if (_motors[1] != nullptr) {
                                 delete _motors[1];
                         }
 			_motors[1] = this;
 			break;
 		case MOTOR_C:
-			if (&_motors[2] != NULL) {
+			if (_motors[2] != nullptr) {
                                 delete _motors[2];
                         }
 			_motors[2] = this;
 			break;
 		case MOTOR_D:
-			if (&_motors[3] != NULL) {
+			if (_motors[3] != nullptr) {
                                 delete _motors[3];
                         }
 			_motors[3] = this;
@@ -337,12 +337,11 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-	Wire.requestFrom((int) _addr, 1, 1);
-	if (Wire.available() != 1) {
-		//TODO error handling
+	if (Wire.requestFrom((int) _addr, 1, 1)) {
+		_page = Wire.read();
 	}
 	else {
-	_page = Wire.read();
+		//TODO error handling
 	}
 
 	//Set Normal Power Mode
@@ -369,7 +368,7 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	registerWrite(0x00, 0x42, 0x00);
 	registerWrite(0x00, 0x41, 0x24);
 
-	//Set Up Timer2 Interrupt to read orientation data at ~100Hz
+	//Set Up Timer2 Interrupt to read orientation data at ~IMU_INTERRUPT_FREQUENCY
 	uint8_t compare;
 	uint8_t prescaler;
 	if (interrupt) {
@@ -444,8 +443,9 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 	if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-	Wire.requestFrom((int) _addr, 1, 1);
-        if (Wire.available() != 1) {
+	if (Wire.requestFrom((int) _addr, 1, 1)) {
+	}
+	else {
 		//TODO error handling
 	}
 	return (uint8_t) Wire.read();
@@ -578,15 +578,16 @@ boolean IMU::calibrate() {
         	if (!Wire.endTransmission(0)) {
 			//TODO error handling
 		}
-        	Wire.requestFrom((int) _addr, 22, 1);
-		if (Wire.available() != 22) {
+        	if (Wire.requestFrom((int) _addr, 22, 1)) {
+        		for (int i = 11; i >= 0; i--) {
+        		lsb = Wire.read();
+        		msb = Wire.read();
+        		*(cal + i) = (msb << 8) | lsb;
+        		}
+		}
+		else {
 			//TODO error handling
 		}
-        	for (int i = 11; i >= 0; i--) {
-        	lsb = Wire.read();
-        	msb = Wire.read();
-        	*(cal + i) = (msb << 8) | lsb;
-        	}
 
 		return true;
 	}
@@ -617,19 +618,17 @@ void IMU::saveCalibration() {
         if (!Wire.endTransmission(0)) {
                 //TODO error handling
         }
-        Wire.requestFrom((int) _addr, 16, 1);
-        if (Wire.available() != 22) {
-                //TODO error handling
-        }
-
-	uint8_t id[16];
-	for (int i = 16; i >= 0; i--) {
-		id[i] = Wire.read();
+        if (Wire.requestFrom((int) _addr, 16, 1)) {
+		uint8_t id[16];
+		for (int i = 16; i >= 0; i--) {
+			id[i] = Wire.read();
+		}
+		EEPROM.put(0, id);
+		EEPROM.put(sizeof(id), calibration);
 	}
-
-
-	EEPROM.put(0, id);
-	EEPROM.put(sizeof(id), calibration);
+	else {
+		//TODO error handling
+	}
 }
 
 /****************
@@ -661,15 +660,15 @@ boolean IMU::restoreCalibration() {
         if (!Wire.endTransmission(0)) {
                 //TODO error handling
         }
-        Wire.requestFrom((int) _addr, 16, 1);
-        if (Wire.available() != 22) {
-                //TODO error handling
-        }
-
-        for (int i = 16; i >= 0; i--) {
-                if (id[i] != Wire.read()) {
-			return false;
+        if (Wire.requestFrom((int) _addr, 16, 1)) {
+        	for (int i = 16; i >= 0; i--) {
+                	if (id[i] != Wire.read()) {
+				return false;
+			}
 		}
+	}
+	else {
+		//TODO error handling
 	}
 
 	uint8_t msb;
@@ -747,122 +746,133 @@ uint16_t IMU::status() {
  * IMU Read Orientation Data *
  *****************************/
 void IMU::update() {
+	//TODO delete below me
+	Serial.println(micros(), DEC);
+	Serial.flush();
+	//TODO delete above me
+
 	uint8_t lsb;
         uint16_t msb;
         Wire.beginTransmission(_instance->_addr);
         Wire.write(0x07);
         Wire.write(0x00);
-        /*if (!Wire.endTransmission(1)) {
+        if (!Wire.endTransmission(1)) {
 		//TODO error handling
 	}
 	else {
 		_instance->_page = 0x00;
-	}*/
-	Wire.endTransmission(1);
+	}
 	Wire.end();
         Wire.beginTransmission(_instance->_addr);
         Wire.write(0x08);
         if (!Wire.endTransmission(0)) {
 		//TODO error handling
 	}
-        Wire.requestFrom((int) _instance->_addr, 46, 1);
-        if (Wire.available() != 46) {
+        if (Wire.requestFrom((int) _instance->_addr, 32, 1)) {
+        	lsb = Wire.read();
+		msb = Wire.read();
+		_instance->accelerometer.x = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->accelerometer.y = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->accelerometer.z = (msb << 8) | lsb;
+	
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->magnetometer.x = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->magnetometer.y = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->magnetometer.z = (msb << 8) | lsb;
+	
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gyroscope.x = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gyroscope.y = (msb << 8) | lsb;
+	
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gyroscope.z = (msb << 8) | lsb;
+	
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->euler.yaw = (msb << 8) | lsb;
+		
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->euler.roll = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->euler.pitch = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->quaternion.w = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->quaternion.x = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->quaternion.y = (msb << 8) | lsb;
+
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->quaternion.z = (msb << 8) | lsb;
+	}
+	else {
 		//TODO error handling
 	}
 
-        lsb = Wire.read();
-	msb = Wire.read();
-	_instance->accelerometer.x = (msb << 8) | lsb;
+	if (Wire.requestFrom((int) _instance->_addr, 14, 1)) {	
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->linearAcceleration.x = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->accelerometer.y = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->linearAcceleration.y = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->accelerometer.z = (msb << 8) | lsb;
-	
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->magnetometer.x = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->linearAcceleration.z = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->magnetometer.y = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gravityVector.x = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->magnetometer.z = (msb << 8) | lsb;
-	
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gyroscope.x = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gravityVector.y = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gyroscope.y = (msb << 8) | lsb;
-	
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gyroscope.z = (msb << 8) | lsb;
-	
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->euler.yaw = (msb << 8) | lsb;
-	
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->euler.roll = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->gravityVector.z = (msb << 8) | lsb;
 
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->euler.pitch = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->quaternion.w = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->quaternion.x = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->quaternion.y = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->quaternion.z = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->linearAcceleration.x = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->linearAcceleration.y = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->linearAcceleration.z = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gravityVector.x = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gravityVector.y = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->gravityVector.z = (msb << 8) | lsb;
-
-	lsb = Wire.read();
-	msb = Wire.read();
-	_instance->temperature = (msb << 8) | lsb;
+		lsb = Wire.read();
+		msb = Wire.read();
+		_instance->temperature = (msb << 8) | lsb;
+	}
+	else {
+		//TODO error handling
+	}
+	//TODO delete below me
 	Serial.println(micros(), DEC);
 	Serial.flush();
+	//TODO delete above me
 }
 
 /**************************************
