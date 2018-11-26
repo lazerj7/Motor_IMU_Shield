@@ -630,7 +630,7 @@ boolean IMU::calibrate() {
 		if (state.serial) {
 			Serial.println(F("IMU Calibrated!"));
 		}
-		registerWrite(0x00. 0x3D, mode);
+		registerWrite(0x00, 0x3D, mode);
 		return true;
 	}
 	else {
