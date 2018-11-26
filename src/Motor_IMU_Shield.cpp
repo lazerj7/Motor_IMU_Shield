@@ -5,139 +5,149 @@
  * MIT License
  */
 
-#include "Arduino.h"
 #include "Motor_IMU_Shield.h"
 
 #define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
-#define I2C_CLK 400000
-#define IMU_INTERRUPT_FREQUENCY 60
+#define I2C_CLK 100000
 
-//Initialize array of object pointers
-Motor* Motor::_motors[4] = {nullptr, nullptr, nullptr, nullptr};
+namespace {
+	struct {
+		unsigned int motors: 4;
+		unsigned int serial: 1;
+		unsigned int spi: 1;
+		unsigned int imu: 1;
+		unsigned int imuAddr: 1;
+	} state;
 
-//Initialize IMU instance
-IMU* IMU::_instance = nullptr;
-
-/***********************
- * Motor Read Function *
- ***********************/
-uint16_t Motor::registerRead(uint16_t addr) {
-	_outputBuffer = addr << 13;
-        SPI.beginTransaction(SPI_SETTINGS);
-        digitalWrite(_cs, LOW);
-        _inputBuffer = SPI.transfer16(_outputBuffer);
-        digitalWrite(_cs, HIGH);
-	//Check for error and store faults if present
-	//Faults must be cleared by error handler or else will remain
-	if (_inputBuffer >> 15) {
-		digitalWrite(_cs, LOW);
-		_registers.fault = SPI.transfer16(A4963_FAULT << 13);
-		digitalWrite(_cs, HIGH);
-	}
-	SPI.endTransaction();
-	return (_inputBuffer & 0x0FFF);
+	volatile boolean* motorFaultPointer;
+	volatile boolean* imuFaultPointer;
 }
 
-/************************
- * Motor Write Function *
- ************************/
-void Motor::registerWrite(uint16_t addr, uint16_t data) {
-	_outputBuffer = (addr << 13) | 0x1000 | data;
-	SPI.beginTransaction(SPI_SETTINGS);
-	digitalWrite(_cs, LOW);
-	_registers.fault = SPI.transfer16(_outputBuffer);
-	digitalWrite(_cs, HIGH);
-	SPI.endTransaction();
-}
+uint8_t IMU::_page = 5;
+uint8_t IMU::_addr = 0;
 
 /*********************
- * Motor Error Check *
+ * Initialize Shield *
  *********************/
-boolean Motor::faultCheck() {
-	if (_registers.fault) {
-	return true;
+void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
+	state.spi = state.imu = state.motors = 0;
+	MOTOR_FAULT = false;
+	IMU_FAULT = false;
+	motorFaultPointer = &MOTOR_FAULT;
+	imuFaultPointer = &IMU_FAULT;
+	if (serial) {
+		Serial.begin(serial);
+		state.serial = 1;
+	}
+	else {
+		state.serial = 0;
 	}
 
-        SPI.beginTransaction(SPI_SETTINGS);
-	digitalWrite(_cs, LOW);
-
-	if (digitalRead(MISO)) {
-		_registers.fault = SPI.transfer16(A4963_FAULT << 13);
-		digitalWrite(_cs, HIGH);
+	SPI.begin();
+	for (int i = MOTOR_A; i <= MOTOR_D; i++) {
+		pinMode(i, OUTPUT);
+		digitalWrite(i, LOW);
+		SPI.beginTransaction(SPI_SETTINGS);
+		SPI.transfer16( (A4963_RUN << 13) | 0x1008 );
 		SPI.endTransaction();
-		return true;
+		digitalWrite(i, HIGH);
+	}
+	SPI.end();
+	if (imuAddr == NOT_JUMPERED) {
+		imuAddr = 0;
+	}
+	else if (imuAddr == JUMPERED) {
+		imuAddr = 1;
+	}
+	else {
+		badAddress();
 	}
 
-	digitalWrite(_cs, HIGH);
-	SPI.endTransaction();
-	_registers.fault = 0x0000;
-	return false;
+	Wire.begin();
+	Wire.setClock(I2C_CLK);
+	Wire.beginTransmission(imuAddr);
+	Wire.write(0x07);
+	Wire.write(0x00);
+	Wire.endTransmission(1);
+	Wire.beginTransmission(imuAddr);
+	Wire.write(0x3E);
+	Wire.write(0x02);
+	Wire.endTransmission(1);
+	Wire.end();
 }
 
 /*********************
  * Motor Constructor *
  *********************/
-Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
-	if (motorTerminal != MOTOR_A && motorTerminal != MOTOR_B && motorTerminal != MOTOR_C && motorTerminal != MOTOR_D) {
-                badTerminal();
-        }
-        
-        //if first instance
-        if (_motors[0] == nullptr && _motors[1] == nullptr && _motors[2] == nullptr && _motors[3] == nullptr) {
-                SPI.usingInterrupt(digitalPinToInterrupt(2));
-                attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
-        	SPI.begin();
-       }
+Motor::Motor() {
+	_cs = 0;
+}
 
-	_cs = motorTerminal;
-	switch(_cs) {
-		case MOTOR_A:
-			if (_motors[0] != nullptr) {
-				delete _motors[0];
-			}
-			_motors[0] = this;
-			break;
-		case MOTOR_B:
-			if (_motors[1] != nullptr) {
-                                delete _motors[1];
-                        }
-			_motors[1] = this;
-			break;
-		case MOTOR_C:
-			if (_motors[2] != nullptr) {
-                                delete _motors[2];
-                        }
-			_motors[2] = this;
-			break;
-		case MOTOR_D:
-			if (_motors[3] != nullptr) {
-                                delete _motors[3];
-                        }
-			_motors[3] = this;
-			break;
+/****************
+ * Attach Motor *
+ ****************/
+Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
+	if (motorTerminal < MOTOR_A || motorTerminal > MOTOR_D) {
+		return nullptr;
 	}
 
+	if (!state.spi) {
+		SPI.usingInterrupt(digitalPinToInterrupt(2));
+		attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+		SPI.begin();
+		state.spi = 1;	
+	}
+
+	state.motors |= 1 << (motorTerminal - MOTOR_A);
+
+	uint16_t buffer;
+	uint16_t fault;
+
+	_cs = motorTerminal;
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH);
 
 	/**********************
-	 * Get Current Config *
+	 * Set Default Config *
 	 **********************/
-	_registers.conf0 = registerRead(A4963_CONF0);
-	_registers.conf1 = registerRead(A4963_CONF1);
-	_registers.conf2 = registerRead(A4963_CONF2);
-	_registers.conf3 = registerRead(A4963_CONF3);
-	_registers.conf4 = registerRead(A4963_CONF4);
-	_registers.conf5 = registerRead(A4963_CONF5);
-	_registers.run = registerRead(A4963_RUN);
-	//Check for error during reads
-	//We expect a POR flag, so ignore it but any other flag
-	//should be treated as an actual error
-	if (_registers.fault & 0x3FFF) {
-		//TODO error handling
-		//clear fault
-		_registers.fault = 0x0000;
+	buffer = (A4963_CONF0 << 13) | 0x1000 | 0x0214;
+	SPI.beginTransaction(SPI_SETTINGS);
+	digitalWrite(_cs, LOW);
+	fault = SPI.transfer16(buffer);
+	digitalWrite(_cs, HIGH);
+	SPI.endTransaction();
+	if (fault & 0x4000) {
+		faultInterrupt();
 	}
+	if (registerRead(A4963_CONF0) != 0x0214) {
+		if (state.serial) {
+			Serial.print(F("Failed to Communicate With Motor Controller "));
+			switch (_cs) {
+				case MOTOR_A:
+					Serial.println(F("A"));
+					break;
+				case MOTOR_B:
+					Serial.println(F("B"));
+					break;
+				case MOTOR_C:
+					Serial.println(F("C"));
+					break;
+				case MOTOR_D:
+					Serial.println(F("D"));
+					break;
+			}
+		}
+		return nullptr;
+	}
+	registerWrite(A4963_CONF1, 0x001F);
+	registerWrite(A4963_CONF2, 0x0780);
+	registerWrite(A4963_CONF3, 0x0752);
+	registerWrite(A4963_CONF4, 0x0773);
+	registerWrite(A4963_CONF5, 0x0708);
+	registerWrite(A4963_RUN, 0x0008);
+	registerWrite(A4963_FAULT, 0x0000);
+
+
 
 	/*********************
 	 * Set Current Limit *
@@ -150,14 +160,11 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 	else if (maxCurrent < 2.5) {
 		maxCurrent = 2.5;
 	}
-		
-	_registers.conf1 &= 0xFC3F; 
-	_registers.conf1 |= ( ( (uint16_t) round( ( ( (maxCurrent * 0.005) / 0.0125 ) - 1.0 ) ) << 6 ) );
 	
-	registerWrite(A4963_CONF1, _registers.conf1);
-	if (faultCheck()) {
-		//TODO error handling
-	}
+	buffer = 0x001F;	
+	buffer |= ( ( (uint16_t) round( ( ( (maxCurrent * 0.005) / 0.0125 ) - 1.0 ) ) << 6 ) );
+	
+	registerWrite(A4963_CONF1, buffer);
 	
 	/*****************
 	 * Set Max Speed *
@@ -167,39 +174,88 @@ Motor::Motor(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t
 		maxSpeed = (uint16_t) ( 196602.0 / (double) numPoles );
 	}
 	
-	_registers.conf5 &= 0xFF8F;
-	_registers.conf5 |= ( (uint16_t) ( round( (log( ( ( ((double) numPoles * (double) maxSpeed) / 6.0 ) + 1.0 ) ) / log(2.0) ) - 8.0 ) ) ) << 4;
-	registerWrite(A4963_CONF5, _registers.conf5);
-	if (faultCheck()) {
-		//TODO error handling
+	buffer = 0x0708;
+	buffer |= ( (uint16_t) ( round( (log( ( ( ((double) numPoles * (double) maxSpeed) / 6.0 ) + 1.0 ) ) / log(2.0) ) - 8.0 ) ) ) << 4;
+	registerWrite(A4963_CONF5, buffer);
+
+	return this;
+}
+
+/***********************
+ * Motor Read Function *
+ ***********************/
+uint16_t Motor::registerRead(uint16_t addr) {
+	uint16_t inputBuffer;
+	uint16_t outputBuffer;
+	outputBuffer = addr << 13;
+        SPI.beginTransaction(SPI_SETTINGS);
+        digitalWrite(_cs, LOW);
+        inputBuffer = SPI.transfer16(outputBuffer);
+        digitalWrite(_cs, HIGH);
+	//Check for error and store faults if present
+	if (inputBuffer >> 15) {
+		faultInterrupt();
 	}
+	SPI.endTransaction();
+	return (inputBuffer & 0x0FFF);
+}
+
+/************************
+ * Motor Write Function *
+ ************************/
+void Motor::registerWrite(uint16_t addr, uint16_t data) {
+	uint16_t inputBuffer;
+	uint16_t outputBuffer;
+	outputBuffer = (addr << 13) | 0x1000 | data;
+	SPI.beginTransaction(SPI_SETTINGS);
+	digitalWrite(_cs, LOW);
+	inputBuffer = SPI.transfer16(outputBuffer);
+	digitalWrite(_cs, HIGH);
+	SPI.endTransaction();
+	if (inputBuffer >> 15) {
+		faultInterrupt();
+	}
+}
+
+/*********************
+ * Motor Error Check *
+ *********************/
+boolean Motor::faultCheck() {
+	digitalWrite(_cs, LOW);
+
+	if (digitalRead(MISO)) {
+		digitalWrite(_cs, HIGH);
+		faultInterrupt();
+		return true;
+	}
+	digitalWrite(_cs, HIGH);
+	return false;
 }
 
 /**********************
  * Motor Set Run Mode *
  **********************/
-boolean Motor::setMode(uint16_t controlMode) {
+void Motor::setMode(uint16_t controlMode) {
+	uint16_t buffer;
+
 	//Only acceptable values or between 0x0000 and 0x0003
 	//If outside this range, set to default indirect speed mode
 	if (controlMode > 0x0003) {
 		controlMode = 0x0000;
 		}
-	
-	_registers.run &= 0xF3FF;
-	_registers.run |= controlMode << 10;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
-	}
-
-	return true;
+	buffer = registerRead(A4963_RUN);
+	buffer &= 0xF3FF;
+	buffer |= controlMode << 10;
+	registerWrite(A4963_RUN, buffer);
 }
 
 /****************************
  * Set Motor Speed          *
  * (Also sets motor to run) *
  ****************************/
-boolean Motor::setSpeed(uint8_t speed) {
+void Motor::setSpeed(uint8_t speed) {
+	uint16_t buffer;
+
 	if (speed > 100) {
 		speed = 100;
 	}
@@ -207,86 +263,65 @@ boolean Motor::setSpeed(uint8_t speed) {
 		speed = 7;
 	}
 
-	_registers.run &= 0xFE0B;
-	_registers.run |= 0x0001 | ( (uint16_t) ( (speed - 7) / 3 ) ) << 4;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
-	}
-
-	return true;
+	buffer = registerRead(A4963_RUN);
+	buffer &= 0xFE0B;
+	buffer |= 0x0001 | ( (uint16_t) ( (speed - 7) / 3 ) ) << 4;
+	registerWrite(A4963_RUN, buffer);
 }
 
 /*******************
  * Get Motor Speed *
  *******************/
 int Motor::getSpeed() {
-	_registers.run = registerRead(A4963_RUN);
-	if (faultCheck()) {
-		//TODO error handling
-	}
-	return (int) ( ( 3 * ( ( _registers.run & 0x01F0 ) >> 4 ) ) + 7 );
+	uint16_t buffer;
+
+	buffer = registerRead(A4963_RUN);
+	return (int) ( ( 3 * ( ( buffer & 0x01F0 ) >> 4 ) ) + 7 );
 }
 
 /***********************
  * Set Motor Direction *
  ***********************/
-boolean Motor::setDirection(uint8_t dir) {
-	_registers.run &= 0xFFFD;
-	_registers.run |= dir << 1;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
-	}
-	return true;
+void Motor::setDirection(uint8_t dir) {
+	uint16_t buffer;
+
+	buffer = registerRead(A4963_RUN);
+	buffer &= 0xFFFD;
+	buffer |= dir << 1;
+	registerWrite(A4963_RUN, buffer);
 }
 
 /********************************
  * Restart Motor After Coasting *
  ********************************/
-boolean Motor::restart() {
-	_registers.run |= 0x0001;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
-	}
+void Motor::restart() {
+	uint16_t buffer;
 
-	return true;
+	buffer = registerRead(A4963_RUN);
+	buffer |= 0x0001;
+	registerWrite(A4963_RUN, buffer);
 }
 
 /***************
  * Coast Motor *
  ***************/
-boolean Motor::coast() {
-	_registers.run &= 0xFFFE;
-	registerWrite(A4963_RUN, _registers.run);
-	if (faultCheck()) {
-		//TODO error handling
-	}
-	
-	return true;
+void Motor::coast() {
+	uint16_t buffer;
+
+	buffer = registerRead(A4963_RUN);
+	buffer &= 0xFFFE;
+	registerWrite(A4963_RUN, buffer);
 }
 
 /********************
  * Motor Destructor *
  ********************/
 Motor::~Motor() {
-	switch(_cs) {
-                case MOTOR_A:
-                        _motors[0] = nullptr;
-                        break;
-                case MOTOR_B:
-                        _motors[1] = nullptr;
-                        break;
-                case MOTOR_C:
-                        _motors[2] = nullptr;
-                        break;
-                case MOTOR_D:
-                        _motors[3] = nullptr;
-                        break;
-        }
-	if (_motors[0] == nullptr && _motors[1] == nullptr && _motors[2] == nullptr && _motors[3] == nullptr) {
+	state.motors &= ~(1 << (_cs - MOTOR_A)); 
+
+	if (!state.motors) {
 		SPI.end();
+		state.spi = 0;
 		detachInterrupt(digitalPinToInterrupt(2));
 	}
 }
@@ -295,7 +330,88 @@ Motor::~Motor() {
  * Motor Fault Interrupt *
  *************************/
 void Motor::faultInterrupt() {
-	//TODO fault interrupt
+	detachInterrupt(digitalPinToInterrupt(2));
+	*motorFaultPointer = true;
+	if (state.serial) {
+		uint16_t buffer;
+		uint16_t fault;
+		
+		interrupts();
+
+		for (int i = MOTOR_A; i < MOTOR_D; i++) {
+			buffer = A4963_FAULT << 13;
+			SPI.beginTransaction(SPI_SETTINGS);
+			digitalWrite(i, LOW);
+			fault = SPI.transfer16(buffer);
+			digitalWrite(i, HIGH);
+			SPI.endTransaction();
+
+			if (fault >> 15) {
+				fault &= 0x6FFF;
+				char motorController[] = "Motor Controller   Error: ";
+				switch (i) {
+					case MOTOR_A:
+						motorController[17] = 'A';
+						break;
+					case MOTOR_B:
+						motorController[17] = 'B';
+						break;
+					case MOTOR_C:
+						motorController[17] = 'C';
+						break;
+					case MOTOR_D:
+						motorController[17] = 'D';
+						break;
+				}
+				for (int j = 14; j >= 0; j--) {
+					if (fault >> j) {
+						fault &= ~(0x4000 >> j);
+						Serial.print(motorController);
+						switch (j) {
+							case 14:
+								Serial.println(F("Power On Reset"));
+								break;
+							case 13:
+								Serial.println(F("Serial Transfer Error"));
+								break;
+							case 11:
+								Serial.println(F("High Temperature Warning"));
+								break;
+							case 10:
+								Serial.println(F("Overtemperature Shutdown"));
+								break;
+							case 9:
+								Serial.println(F("Loss of Synchronization"));
+								break;
+							case 7:
+								Serial.println(F("Low Supply Voltage"));
+								break;
+							case 5:
+								Serial.println(F("Phase U High Side MOSFET Fault"));
+								break;
+							case 4:
+								Serial.println(F("Phase U Low Side MOSFET Fault"));
+								break;
+							case 3:
+								Serial.println(F("Phase V High Side MOSFET Fault"));
+								break;
+							case 2:
+								Serial.println(F("Phase V Low Side MOSFET Fault"));
+								break;
+							case 1:
+								Serial.println(F("Phase W High Side MOSFET Fault"));
+								break;
+							case 0:
+								Serial.println(F("Phase W Low Side MOSFET Fault"));
+								break;
+						}
+					}
+				}
+			}
+		}
+	}
+	noInterrupts();
+	attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
 }
 
 /********************************************************************************
@@ -306,55 +422,59 @@ void Motor::faultInterrupt() {
  *       people have pointed this out online but Arduino doesn't seem to care   *
  *       to fix their documentation........                                     *
  ********************************************************************************/
-IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
-	//check addr
-	if(addr != JUMPERED && addr != NOT_JUMPERED) {
-		badAddress();
-	}
+IMU::IMU() {}
 
-	//delete previous instance if it exists
-	if (_instance != nullptr) {
-		delete _instance;
-	}
-
-	//Serial Communication
-	_useSerial = serial;
-	if (_useSerial) {
-		Serial.begin(9600);
-	}
-
+/**************
+ * Attach IMU *
+ **************/
+IMU* IMU::attach () {
 	Wire.begin();
 	Wire.setClock(I2C_CLK);
 
-	_instance = this;
-
 	//Store address
-	_addr = addr;
+	if (state.imuAddr) {
+		_addr = JUMPERED;
+	}
+	else {
+		_addr = NOT_JUMPERED;
+	}
 
 	//get current register page
 	Wire.beginTransmission(_addr);
 	Wire.write(0x07);
 	if (!Wire.endTransmission(0)) {
-		//TODO error handling
+		delay(50);
+		Wire.beginTransmission(_addr);
+		Wire.write(0x07);
+		if(!Wire.endTransmission(0)) {
+			if (state.serial) {
+				Serial.println(F("Failed to Communicate with BNO055"));
+				Serial.println(F("All Further Attempted Interaction With BNO055 results in undefined behavior!!!!!!!!"));
+			}
+			return nullptr;
+		}
 	}
 	if (Wire.requestFrom((int) _addr, 1, 1)) {
 		_page = Wire.read();
 	}
 	else {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 
 	//Set Normal Power Mode
 	registerWrite(0x00, 0x3E, 0x00);
 	
 	//enter config mode (should be default but just in case...)
-	registerWrite(0x00, 0x3D, 0x00);
+	registerWrite(0x00, 0x3D, CONFIG_MODE);
 
 	//self test
 	registerWrite(0x00, 0x3F, 0x01);
 	delayMicroseconds(50);
 	if (registerRead(0x00, 0x36) != 0x0F) {
-		//TODO error handling
+		if (state.serial) {
+			Serial.println(F("BNO055 FAILED Self Test!!!!!"));
+		}
+		return nullptr;
 	}
 
 	//set units to celsius for temp, degrees for angles, m/s^2 for acceleration
@@ -368,59 +488,9 @@ IMU::IMU (uint8_t addr, boolean serial, boolean interrupt) {
 	registerWrite(0x00, 0x42, 0x00);
 	registerWrite(0x00, 0x41, 0x24);
 
-	//Set Up Timer2 Interrupt to read orientation data at ~IMU_INTERRUPT_FREQUENCY
-	uint8_t compare;
-	uint8_t prescaler;
-	if (interrupt) {
-		if (F_CPU/(uint32_t) IMU_INTERRUPT_FREQUENCY < 256) {
-			prescaler = 0x01;
-			compare = (uint8_t) (F_CPU/(uint32_t) IMU_INTERRUPT_FREQUENCY);
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 8) < 256) {
-			prescaler = 0x02;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 8));
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 32) < 256) {
-			prescaler = 0x03;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 32));
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 64) < 256) {
-			prescaler = 0x04;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 64));
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 128) < 256) {
-			prescaler = 0x05;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 128));
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 256) < 256) {
-			prescaler = 0x06;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 256));
-		}
-		else if (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 1024) < 256) {
-			prescaler = 0x07;
-			compare = (uint8_t) (F_CPU/((uint32_t) IMU_INTERRUPT_FREQUENCY * 1024));
-		}
-		else {
-			compare = 0;
-		}
-	}
-
-	if (compare == 0) {
-		interrupt = false;
-	}
-
-	if (interrupt) {
-		//configure Timer2
-		noInterrupts();
-		TCCR2A = (TCCR2A & 0x0C) | 0x02;	//Set CTC Mode
-		TCCR2B &= 0xF0;
-		TCCR2B |= prescaler;	//Set Prescaler
-		OCR2A = compare;	//Set Compare Value
-		TIMSK2 = (TIMSK2 & 0xFD) | 0x02; //Enable Timer Compare Interrupt
-		TCNT2 = 0;	//Restart Timer at 0	
-		interrupts();
-	}
+	return this;
 }
+
 
 /**************************
  * IMU Read From Register *
@@ -431,7 +501,7 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 		Wire.write(0x07);
 		Wire.write((int) page);
 		if (!Wire.endTransmission(1)) {
-			//TODO error handling
+			IMU::_errorHandler();
 		}
 		else {
 		_page = page;
@@ -441,12 +511,12 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 	Wire.beginTransmission(_addr);
 	Wire.write((int) reg);
 	if (!Wire.endTransmission(0)) {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 	if (Wire.requestFrom((int) _addr, 1, 1)) {
 	}
 	else {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 	return (uint8_t) Wire.read();
 }
@@ -455,12 +525,12 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
  * IMU Write To Register *
  *************************/
 void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
-	if (_page != page) {
+	if (IMU::_page != page) {
                 Wire.beginTransmission(_addr);
                 Wire.write(0x07);
                 Wire.write((int) page);
                if (!Wire.endTransmission(1)) {
-		       //TODO error handling
+		       IMU::_errorHandler();
 	       }
 	       else {
                 _page = page;
@@ -471,7 +541,7 @@ void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
 	Wire.write((int) reg);
 	Wire.write((int) value);
 	if (!Wire.endTransmission(1)) {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 }
 
@@ -479,20 +549,20 @@ void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
  * IMU Calibrate *
  *****************/
 boolean IMU::calibrate() {
-	if(_mode < 0x08) {
-		if (_useSerial) {
-			Serial.println("IMU ERROR: Can Only Perform Calibration When In a Fusion Mode!");
-		}
-		return false;
-	}
+	//Disable Interrupt
+	noInterrupts();
+	TIMSK2 &= 0xFD;
+	interrupts();
+	//Enter NDOF Mode
+	registerWrite(0x00, 0x3D, 0x0C);
 
 	unsigned long started = millis();
 	unsigned long time = 0;
 	uint8_t status = 0;
 
-	if (_useSerial) {
-		Serial.println("IMU Calibration Started.");
-		Serial.println("To calibrate gyroscope set device on solid surface and ensure no movement.");
+	if (state.serial) {
+		Serial.println(F("IMU Calibration Started."));
+		Serial.println(F("To calibrate gyroscope set device on solid surface and ensure no movement."));
 	}
 
 	while (status < 3 && time < 60000) {
@@ -501,16 +571,16 @@ boolean IMU::calibrate() {
 	}
 
 	if (status != 3) {
-		if (_useSerial) {
-			Serial.println("IMU ERROR: Gyroscope Calibration Failed!");
-			Serial.println("IMU ERROR: Calibration Failed!");
+		if (state.serial) {
+			Serial.println(F("IMU ERROR: Gyroscope Calibration Failed!"));
+			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
 		return false;
 	}
 
-	if (_useSerial) {
-		Serial.println("Gyroscope Calibrated!");
-		Serial.println("To calibrate accelerometer place device in up to 6 different stable positions, pausing for a few seconds in each position, with slow movement between each position. Ensure the device is laying at least once perpindicular to x, y, and z axis.");
+	if (state.serial) {
+		Serial.println(F("Gyroscope Calibrated!"));
+		Serial.println(F("To calibrate accelerometer place device in up to 6 different stable positions, pausing for a few seconds in each position, with slow movement between each position. Ensure the device is laying at least once perpindicular to x, y, and z axis."));
 	}
 
 	status = 0;
@@ -522,16 +592,16 @@ boolean IMU::calibrate() {
 	}
 
 	if (status != 3) {
-		if (_useSerial) {
-			Serial.println("IMU ERROR: Accelerometer Calibration Failed!");
-			Serial.println("IMU ERROR: Calibration Failed!");
+		if (state.serial) {
+			Serial.println(F("IMU ERROR: Accelerometer Calibration Failed!"));
+			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
 		return false;
 	}
 
-	if (_useSerial) {
-		Serial.println("Accelerometer Calibrated!");
-		Serial.println("To calibrate magnetometer, make some random movements with device");
+	if (state.serial) {
+		Serial.println(F("Accelerometer Calibrated!"));
+		Serial.println(F("To calibrate magnetometer, make some random movements with device"));
 	}
 
 	status = 0;
@@ -543,57 +613,29 @@ boolean IMU::calibrate() {
 	}
 
 	if (status != 3) {
-		if (_useSerial) {
-			Serial.println("IMU ERROR: Magnetometer calibration failed!");
-			Serial.println("IMU ERROR: Calibration Failed!");
+		if (state.serial) {
+			Serial.println(F("IMU ERROR: Magnetometer calibration failed!"));
+			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
 		return false;
 	}
 
-	if (_useSerial) {
-		Serial.println("Magnetometer Calibrated!");
+	if (state.serial) {
+		Serial.println(F("Magnetometer Calibrated!"));
 	}
 
 	status = registerRead(0x00, 0x35) >> 6;
 
 	if (status == 3) {
-		if (_useSerial) {
-			Serial.println("IMU Calibrated!");
-		}
-
-		uint8_t lsb;
-        	uint16_t msb;
-        	uint16_t* cal = (uint16_t*) &calibration;
-        	Wire.beginTransmission(_addr);
-        	Wire.write(0x07);
-        	Wire.write(0x00);
-        	if (!Wire.endTransmission(1)) {
-			//TODO error handling
-		}
-		else {
-			_page = 0x00;
-		}
-        	Wire.beginTransmission(_addr);
-        	Wire.write(0x55);
-        	if (!Wire.endTransmission(0)) {
-			//TODO error handling
-		}
-        	if (Wire.requestFrom((int) _addr, 22, 1)) {
-        		for (int i = 11; i >= 0; i--) {
-        		lsb = Wire.read();
-        		msb = Wire.read();
-        		*(cal + i) = (msb << 8) | lsb;
-        		}
-		}
-		else {
-			//TODO error handling
+		if (state.serial) {
+			Serial.println(F("IMU Calibrated!"));
 		}
 
 		return true;
 	}
 	else {
-		if (_useSerial) {
-			Serial.println("IMU ERROR: Calibration Failed!");
+		if (state.serial) {
+			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
 
 		return false;
@@ -608,7 +650,7 @@ void IMU::saveCalibration() {
         Wire.write(0x07);
         Wire.write(0x01);
         if (!Wire.endTransmission(1)) {
-                //TODO error handling
+                IMU::_errorHandler();
         }
         else {
                 _page = 0x01;
@@ -616,18 +658,24 @@ void IMU::saveCalibration() {
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
         if (!Wire.endTransmission(0)) {
-                //TODO error handling
+                IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
 		uint8_t id[16];
 		for (int i = 16; i >= 0; i--) {
 			id[i] = Wire.read();
 		}
+		if (state.serial) {
+			Serial.println(F("Saving calibration information to EEPROM. Please Wait."));
+		}
 		EEPROM.put(0, id);
-		EEPROM.put(sizeof(id), calibration);
+		EEPROM.put(sizeof(id), getCalibration());
+		if (state.serial) {
+			Serial.println(F("Calibration Data Saved to EEPROM."));
+		}
 	}
 	else {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 }
 
@@ -635,8 +683,14 @@ void IMU::saveCalibration() {
  * Clear EEPROM *
  ****************/
 void IMU::eepromClear() {
+	if (state.serial) {
+		Serial.println(F("Clearing EEPROM. Please Wait."));
+	}
 	for (unsigned int i = 0; i < EEPROM.length(); i++) {
 		EEPROM.write(i, 0);
+	}
+	if (state.serial) {
+		Serial.println(F("EEPROM Cleared."));
 	}
 }
 
@@ -644,13 +698,18 @@ void IMU::eepromClear() {
  * IMU Restore Calibration From EEPROM *
  ***************************************/
 boolean IMU::restoreCalibration() {
+	uint8_t mode;
 	uint8_t id[16];
+	
+	mode = registerRead(0x00, 0x1C);
+	registerWrite(0x00, 0x1C, CONFIG_MODE); 
+
 	EEPROM.get(0, id);
 	Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x01);
         if (!Wire.endTransmission(1)) {
-                //TODO error handling
+                IMU::_errorHandler();
         }
         else {
                 _page = 0x01;
@@ -658,7 +717,7 @@ boolean IMU::restoreCalibration() {
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
         if (!Wire.endTransmission(0)) {
-                //TODO error handling
+                IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
         	for (int i = 16; i >= 0; i--) {
@@ -668,11 +727,12 @@ boolean IMU::restoreCalibration() {
 		}
 	}
 	else {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 
 	uint8_t msb;
 	uint8_t lsb;
+	calibrationData calibration;
 	uint16_t* cal = (uint16_t*) &calibration;
 	uint8_t startAddr = 0x6A;
 
@@ -681,7 +741,7 @@ boolean IMU::restoreCalibration() {
 	Wire.write(0x07);
 	Wire.write(0x00);
 	if (!Wire.endTransmission(1)) {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 	else {
 		_page = 0x00;
@@ -693,17 +753,56 @@ boolean IMU::restoreCalibration() {
 		Wire.write(startAddr--);
 		Wire.write(msb);
 		if (!Wire.endTransmission(1)) {
-			//TODO error handling
+			IMU::_errorHandler();
 		}
 		Wire.beginTransmission(_addr);
 		Wire.write(startAddr--);
 		Wire.write(lsb);
 		if (!Wire.endTransmission(1)) {
-			//TODO error handling
+			IMU::_errorHandler();
 		}
 	}
+	registerWrite(0x00, 0x1C, mode);
 	return true;
 }
+
+/****************************
+ * IMU Get Calibration Data *
+ ****************************/
+IMU::calibrationData IMU::getCalibration() {
+	calibrationData calibration;
+	uint8_t lsb;
+        uint16_t msb;
+	uint8_t i;
+	uint16_t* startAddr = (uint16_t*) &calibration;
+
+        Wire.beginTransmission(_addr);
+        Wire.write(0x07);
+        Wire.write(0x00);
+        if (!Wire.endTransmission(1)) {
+		IMU::_errorHandler();
+	}
+	else {
+		_page = 0x00;
+	}
+	Wire.beginTransmission(_addr);
+        Wire.write(0x55);
+        if (!Wire.endTransmission(0)) {
+		IMU::_errorHandler();
+	}
+        if (Wire.requestFrom((int) _addr, 22, 0)) {
+		for (i = 0; i < 22; i++) {
+			lsb = Wire.read();
+			msb = (Wire.read()) << 8;
+			*(startAddr + i) = msb | lsb;
+		}
+        }
+	else {
+		IMU::_errorHandler();
+	}
+	return calibration;
+}
+
 
 /**************************
  * IMU Set Operating Mode *
@@ -745,147 +844,170 @@ uint16_t IMU::status() {
 /*****************************
  * IMU Read Orientation Data *
  *****************************/
-void IMU::update() {
-	//TODO delete below me
-	Serial.println(micros(), DEC);
-	Serial.flush();
-	//TODO delete above me
-
+void IMU::dat::update(uint8_t dataType) {
 	uint8_t lsb;
         uint16_t msb;
-        Wire.beginTransmission(_instance->_addr);
+	
+        Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x00);
         if (!Wire.endTransmission(1)) {
-		//TODO error handling
+		IMU::_errorHandler();
 	}
 	else {
-		_instance->_page = 0x00;
-	}
-	Wire.end();
-        Wire.beginTransmission(_instance->_addr);
-        Wire.write(0x08);
-        if (!Wire.endTransmission(0)) {
-		//TODO error handling
-	}
-        if (Wire.requestFrom((int) _instance->_addr, 32, 1)) {
-        	lsb = Wire.read();
-		msb = Wire.read();
-		_instance->accelerometer.x = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->accelerometer.y = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->accelerometer.z = (msb << 8) | lsb;
-	
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->magnetometer.x = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->magnetometer.y = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->magnetometer.z = (msb << 8) | lsb;
-	
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gyroscope.x = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gyroscope.y = (msb << 8) | lsb;
-	
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gyroscope.z = (msb << 8) | lsb;
-	
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->euler.yaw = (msb << 8) | lsb;
-		
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->euler.roll = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->euler.pitch = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->quaternion.w = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->quaternion.x = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->quaternion.y = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->quaternion.z = (msb << 8) | lsb;
-	}
-	else {
-		//TODO error handling
+		_page = 0x00;
 	}
 
-	if (Wire.requestFrom((int) _instance->_addr, 14, 1)) {	
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->linearAcceleration.x = (msb << 8) | lsb;
 
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->linearAcceleration.y = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->linearAcceleration.z = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gravityVector.x = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gravityVector.y = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->gravityVector.z = (msb << 8) | lsb;
-
-		lsb = Wire.read();
-		msb = Wire.read();
-		_instance->temperature = (msb << 8) | lsb;
+	switch (dataType) {
+		case ACCELEROMETER:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x08);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(accelerometer.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case MAGNETOMETER:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x0E);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(magnetometer.x) ) + i) = ((double) (msb | lsb))/ 16.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case GYROSCOPE:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x14);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(gyroscope.x) ) + i) = ((double) (msb | lsb))/ 16.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case EULER_ANGLES:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x1A);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(eulerData.yaw) ) + i) = ((double) (msb | lsb))/ 16.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case QUATERNION:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x20);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(quaternionData.w) ) + i) = ((double) (msb | lsb))/ 16384.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case LINEAR_ACCELERATION:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x28);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(linearAcceleration.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case GRAVITY_VECTOR:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x2E);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 6, 0)) {
+				for (int i = 0; i < 3; i++) {
+					lsb = Wire.read();
+					msb = (Wire.read()) << 8;
+					*( ( (double*) &(gravityVector.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+				}
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
+		case TEMPERATURE:
+			Wire.beginTransmission(_addr);
+			Wire.write(0x34);
+			if (!Wire.endTransmission(0)) {
+				IMU::_errorHandler();
+			}
+			if (Wire.requestFrom((int) _addr, 1, 0)) {
+				temperature = Wire.read();
+			}
+			else {
+				IMU::_errorHandler();
+			}
+			break;
 	}
-	else {
-		//TODO error handling
-	}
-	//TODO delete below me
-	Serial.println(micros(), DEC);
-	Serial.flush();
-	//TODO delete above me
 }
 
-/**************************************
- * Timer Interrupt To Update IMU Data *
- **************************************/
-ISR(TIMER2_COMPA_vect) {
-	IMU::_interruptHelper helper;
+/***************************
+ * IMU Communication Error *
+ ***************************/
+void IMU::_errorHandler() {
+	*imuFaultPointer = true;
+	if (state.serial) {
+		Serial.println(F("Error Communicating With BNO055 IMU"));
+	}
 }
 
 /******************
  * IMU Destructor *
  ******************/
 IMU::~IMU() {
-	_instance = nullptr;
 	Wire.end();
 }

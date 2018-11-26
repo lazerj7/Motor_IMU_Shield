@@ -1,3 +1,7 @@
+#THIS IS AN ALPHA RELEASE
+
+#THIS README IS INCORRECT AND NEEDS TO BE UPDATED
+
 # Motor_IMU_Shield
 
 This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno (Should be Widely Compatibile with other Arduinos i.e. Mega) which provides 4 Brushless DC Motor Drivers and an integrated Inertial Measurement Unit (IMU). The Motor Controllers are Allegro MicroSystems A4963's and the IMU is a Bosch Sensortec BNO055. The PCB directory contains a PDF Schematic for the Shield as well as a KiCad Project for the Shield and the Gerber files for the Shield.

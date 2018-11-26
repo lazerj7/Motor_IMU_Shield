@@ -52,6 +52,7 @@
  * BNO055 Addresses *
  ********************/
 #define JUMPERED 0X28
+#define CLOSED 0X28
 #define NOT_JUMPERED 0X29
 #define OPEN 0x29
 
@@ -72,48 +73,69 @@
 #define NDOF_FMC_OFF_MODE 0x0B
 #define NDOF_MODE 0x0C
 
-/***********************************
- * Forward Declare Timer Interrupt *
- ***********************************/
-ISR(TIMER2_COMPA_vect);
+/*********************
+ * BNO055 Data Types *
+ *********************/
+#define ACCELEROMETER 0
+#define MAGNETOMETER 1
+#define GYROSCOPE 2
+#define EULER_ANGLES 3
+#define QUATERNION 4
+#define LINEAR_ACCELERATION 5
+#define GRAVITY_VECTOR 6
+#define TEMPERATURE 7
+
+struct vector {
+	double x;
+	double y;
+	double z;
+};
+struct euler {
+	double yaw;
+	double roll;
+	double pitch;
+};
+struct quaternion {
+	double w;
+	double x;
+	double y;
+	double z;
+};
+
+
+struct Motor_IMU_Shield {
+	public:
+		void begin(uint8_t imuAddr, int serial = 9600);
+		volatile boolean MOTOR_FAULT;
+		volatile boolean IMU_FAULT;
+	private:
+		void badAddress()__attribute__((error("Invalid IMU Address")));
+};
 
 class Motor{
 	public:
-		Motor(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint16_t maxSpeed = 32767);
+		Motor();
 		~Motor();
+		Motor* attach(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint16_t maxSpeed = 32767);
 		uint16_t registerRead(uint16_t addr);
                 void registerWrite(uint16_t addr, uint16_t data);
                 boolean faultCheck();
-		boolean setMode(uint16_t controlMode);
-		boolean setSpeed(uint8_t speed);
+		void setMode(uint16_t controlMode);
+		void setSpeed(uint8_t speed);
 		int getSpeed();
-		boolean setDirection(uint8_t dir);
-		boolean restart();
-		boolean coast();
+		void setDirection(uint8_t dir);
+		void restart();
+		void coast();
 		static void faultInterrupt();
 	private:
-		static void badTerminal()  __attribute__((error("Invalid Motor Terminal!")));
-		uint16_t _outputBuffer;
-		uint16_t _inputBuffer;
 		uint8_t _cs;
-		struct registers {
-			uint16_t fault;
-			uint16_t conf0;
-			uint16_t conf1;
-			uint16_t conf2;
-			uint16_t conf3;
-			uint16_t conf4;
-			uint16_t conf5;
-			uint16_t run;
-		} _registers;
-		static Motor* _motors[4];
 };
 
 class IMU {
-	friend void TIMER2_COMPA_vect();
 	public:
-		IMU(uint8_t addr, boolean serial = false, boolean interrupt = true);
+		IMU();
 		~IMU();
+		IMU* attach();
 		uint8_t registerRead(uint8_t page, uint8_t reg);
 		void registerWrite(uint8_t page, uint8_t reg, uint8_t value);
 		boolean calibrate();
@@ -123,9 +145,21 @@ class IMU {
 		void setMode(uint8_t mode);
 		void suspend();
 		void wake();
-		static void update();
 		uint16_t status();
-		struct cal {
+		struct dat{
+			union {
+				vector accelerometer;
+				vector magnetometer;
+				vector gyroscope;
+				euler eulerData;
+				quaternion quaternionData;
+				vector linearAcceleration;
+				vector gravityVector;
+				int8_t temperature;
+			};
+			 void update(uint8_t dataType);
+		} data;
+		struct calibrationData {
 			uint16_t magRadius;
 			uint16_t accRadius;
 			uint16_t gyroZOffset;
@@ -137,58 +171,12 @@ class IMU {
 			uint16_t accZOffset;
 			uint16_t accYOffset;
 			uint16_t accXOffset;
-		} calibration;
-		struct acc {
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
-		} accelerometer;
-		struct mag {
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
-		} magnetometer;
-		struct gyr {
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
-		} gyroscope;
-		struct eul {
-			volatile uint16_t yaw;
-			volatile uint16_t roll;
-			volatile uint16_t pitch;
-		} euler;
-		struct qua {
-			volatile uint16_t w;
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
-		} quaternion;
-		struct linacc {
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
 		};
-	       	linacc linearAcceleration;
-		struct grav {
-			volatile uint16_t x;
-			volatile uint16_t y;
-			volatile uint16_t z;
-		} gravityVector;
-		volatile uint16_t temperature;
+		calibrationData getCalibration();
 	private:
-		static void badAddress()  __attribute__((error("Invalid IMU Address!")));
-		struct _interruptHelper {
-			~_interruptHelper(){
-				IMU::update();
-			};
-		};
-		static IMU* _instance;
-		uint8_t _addr;
-		uint8_t _page;
-		uint8_t _mode;
-		uint8_t _useSerial;
-		uint8_t _noInt;
+		static void _errorHandler();
+		static uint8_t _addr;
+		static uint8_t _page;
 };
 
 #endif
