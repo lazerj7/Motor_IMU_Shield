@@ -549,11 +549,8 @@ void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
  * IMU Calibrate *
  *****************/
 boolean IMU::calibrate() {
-	//Disable Interrupt
-	noInterrupts();
-	TIMSK2 &= 0xFD;
-	interrupts();
 	//Enter NDOF Mode
+	uint8_t mode = registerRead(0x00, 0x3D);
 	registerWrite(0x00, 0x3D, 0x0C);
 
 	unsigned long started = millis();
@@ -575,6 +572,7 @@ boolean IMU::calibrate() {
 			Serial.println(F("IMU ERROR: Gyroscope Calibration Failed!"));
 			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
+		registerWrite(0x00, 0x3D, mode);
 		return false;
 	}
 
@@ -596,6 +594,7 @@ boolean IMU::calibrate() {
 			Serial.println(F("IMU ERROR: Accelerometer Calibration Failed!"));
 			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
+		registerWrite(0x00, 0x3D, mode);
 		return false;
 	}
 
@@ -617,6 +616,7 @@ boolean IMU::calibrate() {
 			Serial.println(F("IMU ERROR: Magnetometer calibration failed!"));
 			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
+		registerWrite(0x00, 0x3D, mode);
 		return false;
 	}
 
@@ -630,14 +630,14 @@ boolean IMU::calibrate() {
 		if (state.serial) {
 			Serial.println(F("IMU Calibrated!"));
 		}
-
+		registerWrite(0x00, 0x3D, mode);
 		return true;
 	}
 	else {
 		if (state.serial) {
 			Serial.println(F("IMU ERROR: Calibration Failed!"));
 		}
-
+		registerWrite(0x00, 0x3D, mode);
 		return false;
 	}
 }
