@@ -1,0 +1,112 @@
+#######################################
+# Syntax Coloring Map Motor_IMU_Shield
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+vector	KEYWORD1
+euler	KEYWORD1
+quaternion	KEYWORD1
+Motor_IMU_Shield	KEYWORD1
+Motor	KEYWORD1
+IMU	KEYWORD1
+
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+attach	KEYWORD2
+registerRead	KEYWORD2
+registerWrite	KEYWORD2
+faultCheck	KEYWORD2
+setMode	KEYWORD2
+setSpeed	KEYWORD2
+getSpeed	KEYWORD2
+setDirection	KEYWORD2
+restart	KEYWORD2
+coast	KEYWORD2
+faultInterrupt	KEYWORD2
+calibrate	KEYWORD2
+saveCalibration	KEYWORD2
+eepromClear	KEYWORD2
+restoreCalibration	KEYWORD2
+setMode	KEYWORD2
+suspend	KEYWORD2
+wake	KEYWORD2
+status	KEYWORD2
+update	KEYWORD2
+getCalibration	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+A4963_CONF0	LITERAL1
+A4963_CONF1	LITERAL1
+A4963_CONF2	LITERAL1
+A4963_CONF3	LITERAL1
+A4963_CONF4	LITERAL1
+A4963_CONF5	LITERAL1
+A4963_FAULT	LITERAL1
+A4963_RUN	LITERAL1
+
+MOTOR_A	LITERAL1
+MOTOR_B	LITERAL1
+MOTOR_C	LITERAL1
+MOTOR_D	LITERAL1
+
+INDIRECT_SPEED	LITERAL1
+DIRECT_SPEED	LITERAL1
+CLOSED_LOOP_CURRENT	LITERAL1
+CLOSED_LOOP_SPEED	LITERAL1
+
+FORWARD	LITERAL1
+REVERSE	LITERAL1
+
+JUMPERED	LITERAL1
+CLOSED	LITERAL1
+NOT_JUMPERED	LITERAL1
+OPEN	LITERAL1
+
+CONFIG_MODE	LITERAL1
+ACC_ONLY_MODE	LITERAL1
+MAG_ONLY_MODE	LITERAL1
+GYRO_ONLY_MODE	LITERAL1
+ACC_MAG_MODE	LITERAL1
+ACC_GYRO_MODE	LITERAL1
+MAG_GYRO_MODE	LITERAL1
+AMG_MODE	LITERAL1
+IMU_MODE	LITERAL1
+COMPASS_MODE	LITERAL1
+M4G_MODE	LITERAL1
+NDOF_FMC_OFF_MODE	LITERAL1
+NDOF_MODE	LITERAL1
+
+ACCELEROMETER	LITERAL1
+MAGNETOMETER	LITERAL1
+GYROSCOPE	LITERAL1
+EULER_ANGLES	LITERAL1
+QUATERNION	LITERAL1
+LINEAR_ACCELERATION	LITERAL1
+GRAVITY_VECTOR	LITERAL1
+TEMPERATURE	LITERAL1
+
+#######################################
+# Library Variables (LITERAL1)
+#######################################
+
+MOTOR_FAULT	LITERAL1
+IMU_FAULT	LITERAL1
+
+accelerometer	LITERAL1
+magnetometer	LITERAL1
+gyroscope	LITERAL1
+eulerData	LITERAL1
+quaternionData	LITERAL1
+linearAcceleration	LITERAL1
+gravityVector	LITERAL1
+temperature	LITERAL1
