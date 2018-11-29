@@ -1,0 +1,3 @@
+[submodule "Motor_IMU_Shield_PCB"]
+	path = Motor_IMU_Shield_PCB
+	url = https://github.com/lazerj7/Motor_IMU_Shield_PCB

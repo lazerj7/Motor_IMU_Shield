@@ -155,7 +155,7 @@ class IMU {
 				quaternion quaternionData;
 				vector linearAcceleration;
 				vector gravityVector;
-				int8_t temperature;
+				double temperature;
 			};
 			 void update(uint8_t dataType);
 		} data;
