@@ -7,7 +7,7 @@
 
 #include "Motor_IMU_Shield.h"
 
-#define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
+#define SPI_SETTINGS SPISettings(1000000,MSBFIRST,SPI_MODE3)
 #define I2C_CLK 100000
 
 namespace {
@@ -29,7 +29,7 @@ uint8_t IMU::_addr = 0;
 /*********************
  * Initialize Shield *
  *********************/
-void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
+void Motor_IMU_Shield::begin(uint8_t imuAddr, long serial) {
 	state.spi = state.imu = state.motors = 0;
 	MOTOR_FAULT = false;
 	IMU_FAULT = false;
@@ -45,12 +45,13 @@ void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
 
 	SPI.begin();
 	for (int i = MOTOR_A; i <= MOTOR_D; i++) {
-		pinMode(i, OUTPUT);
-		digitalWrite(i, LOW);
-		SPI.beginTransaction(SPI_SETTINGS);
-		SPI.transfer16( (A4963_RUN << 13) | 0x1008 );
-		SPI.endTransaction();
 		digitalWrite(i, HIGH);
+		pinMode(i, OUTPUT);
+		SPI.beginTransaction(SPI_SETTINGS);
+		digitalWrite(i, LOW);
+		SPI.transfer16( (A4963_RUN << 13) | 0x1008 );
+		digitalWrite(i, HIGH);
+		SPI.endTransaction();
 	}
 	SPI.end();
 	if (imuAddr == NOT_JUMPERED) {
@@ -92,14 +93,14 @@ Motor::Motor() {
 /****************
  * Attach Motor *
  ****************/
-Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
+Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint32_t maxSpeed) {
 	if (motorTerminal < MOTOR_A || motorTerminal > MOTOR_D) {
 		return nullptr;
 	}
 
 	if (!state.spi) {
 		SPI.usingInterrupt(digitalPinToInterrupt(2));
-		attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+		//attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
 		SPI.begin();
 		state.spi = 1;	
 	}
@@ -110,8 +111,8 @@ Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, 
 	uint16_t fault;
 
 	_cs = motorTerminal;
-	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH);
+	pinMode(_cs, OUTPUT);
 
 	/**********************
 	 * Set Default Config *
@@ -148,9 +149,9 @@ Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, 
 	registerWrite(A4963_CONF1, 0x001F);
 	registerWrite(A4963_CONF2, 0x0780);
 	registerWrite(A4963_CONF3, 0x0752);
-	registerWrite(A4963_CONF4, 0x0773);
+	registerWrite(A4963_CONF4, 0x075F);
 	registerWrite(A4963_CONF5, 0x0708);
-	registerWrite(A4963_RUN, 0x0008);
+	registerWrite(A4963_RUN, 0x000A);
 	registerWrite(A4963_FAULT, 0x0000);
 
 
@@ -280,9 +281,14 @@ void Motor::setSpeed(uint8_t speed) {
  *******************/
 int Motor::getSpeed() {
 	uint16_t buffer;
+	uint8_t speed;
 
 	buffer = registerRead(A4963_RUN);
-	return (int) ( ( 3 * ( ( buffer & 0x01F0 ) >> 4 ) ) + 7 );
+	speed = ((int) ( ( 3* ( ( buffer & 0x01F0 ) >> 4 ) ) + 7 ));
+	if (speed <= 7) {
+		return 0;
+	}
+	return speed;
 }
 
 /***********************
@@ -336,15 +342,15 @@ Motor::~Motor() {
  * Motor Fault Interrupt *
  *************************/
 void Motor::faultInterrupt() {
-	detachInterrupt(digitalPinToInterrupt(2));
+	//detachInterrupt(digitalPinToInterrupt(2));
 	*motorFaultPointer = true;
 	if (state.serial) {
 		uint16_t buffer;
 		uint16_t fault;
 		
-		interrupts();
+		//interrupts();
 
-		for (int i = MOTOR_A; i < MOTOR_D; i++) {
+		for (int i = MOTOR_A; i <= MOTOR_D; i++) {
 			buffer = A4963_FAULT << 13;
 			SPI.beginTransaction(SPI_SETTINGS);
 			digitalWrite(i, LOW);
@@ -352,7 +358,7 @@ void Motor::faultInterrupt() {
 			digitalWrite(i, HIGH);
 			SPI.endTransaction();
 
-			if (fault >> 15) {
+			if ((fault >> 15) != 0x0000) {
 				fault &= 0x6FFF;
 				char motorController[] = "Motor Controller   Error: ";
 				switch (i) {
@@ -370,8 +376,8 @@ void Motor::faultInterrupt() {
 						break;
 				}
 				for (int j = 14; j >= 0; j--) {
-					if (fault >> j) {
-						fault &= ~(0x4000 >> j);
+					if ((fault >> j) != 0x0000) {
+						fault &= (~(0x0001 << j));
 						Serial.print(motorController);
 						switch (j) {
 							case 14:
@@ -416,8 +422,8 @@ void Motor::faultInterrupt() {
 			}
 		}
 	}
-	noInterrupts();
-	attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+	//noInterrupts();
+	//attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
 }
 
 /********************************************************************************
@@ -677,10 +683,11 @@ boolean IMU::calibrate() {
  * IMU Save Calibration To EEPROM *
  **********************************/
 void IMU::saveCalibration() {
+	calibrationData calibration;
 	Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x01);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
                 IMU::_errorHandler();
         }
         else {
@@ -688,19 +695,22 @@ void IMU::saveCalibration() {
         }
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
                 IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
 		uint8_t id[16];
-		for (int i = 16; i >= 0; i--) {
+		for (int i = 15; i >= 0; i--) {
 			id[i] = Wire.read();
 		}
 		if (state.serial) {
 			Serial.println(F("Saving calibration information to EEPROM. Please Wait."));
 		}
-		EEPROM.put(0, id);
-		EEPROM.put(sizeof(id), getCalibration());
+		for (int i = 0; i < 16; i++) {
+			EEPROM.write((i * sizeof(uint8_t)), id[i]);
+		}
+		calibration = getCalibration();
+		EEPROM.put((16 * sizeof(uint8_t)), calibration);
 		if (state.serial) {
 			Serial.println(F("Calibration Data Saved to EEPROM."));
 		}
@@ -732,14 +742,16 @@ boolean IMU::restoreCalibration() {
 	uint8_t mode;
 	uint8_t id[16];
 	
-	mode = registerRead(0x00, 0x1C);
-	registerWrite(0x00, 0x1C, CONFIG_MODE); 
+	mode = registerRead(0x00, 0x3D);
+	registerWrite(0x00, 0x3D, CONFIG_MODE); 
 
-	EEPROM.get(0, id);
+	for(int i = 0; i < 16; i ++) {
+		id[i] = EEPROM.read((i * sizeof(uint8_t)));
+	}
 	Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x01);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
                 IMU::_errorHandler();
         }
         else {
@@ -747,11 +759,11 @@ boolean IMU::restoreCalibration() {
         }
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
                 IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
-        	for (int i = 16; i >= 0; i--) {
+        	for (int i = 15; i >= 0; i--) {
                 	if (id[i] != Wire.read()) {
 				return false;
 			}
@@ -767,11 +779,11 @@ boolean IMU::restoreCalibration() {
 	uint16_t* cal = (uint16_t*) &calibration;
 	uint8_t startAddr = 0x6A;
 
-	EEPROM.get(sizeof(id), calibration);
+	EEPROM.get((16 * sizeof(uint8_t)), calibration);
 	Wire.beginTransmission(_addr);
 	Wire.write(0x07);
 	Wire.write(0x00);
-	if (!Wire.endTransmission(1)) {
+	if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 	else {
@@ -783,17 +795,17 @@ boolean IMU::restoreCalibration() {
 		Wire.beginTransmission(_addr);
 		Wire.write(startAddr--);
 		Wire.write(msb);
-		if (!Wire.endTransmission(1)) {
+		if (Wire.endTransmission(1) != 0) {
 			IMU::_errorHandler();
 		}
 		Wire.beginTransmission(_addr);
 		Wire.write(startAddr--);
 		Wire.write(lsb);
-		if (!Wire.endTransmission(1)) {
+		if (Wire.endTransmission(1) != 0) {
 			IMU::_errorHandler();
 		}
 	}
-	registerWrite(0x00, 0x1C, mode);
+	registerWrite(0x00, 0x3D, mode);
 	return true;
 }
 
@@ -810,7 +822,7 @@ IMU::calibrationData IMU::getCalibration() {
         Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x00);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 	else {
@@ -818,7 +830,7 @@ IMU::calibrationData IMU::getCalibration() {
 	}
 	Wire.beginTransmission(_addr);
         Wire.write(0x55);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
 		IMU::_errorHandler();
 	}
         if (Wire.requestFrom((int) _addr, 22, 0)) {

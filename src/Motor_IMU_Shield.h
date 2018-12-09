@@ -105,7 +105,7 @@ struct quaternion {
 
 struct Motor_IMU_Shield {
 	public:
-		void begin(uint8_t imuAddr, int serial = 9600);
+		void begin(uint8_t imuAddr, long serial = 9600);
 		volatile boolean MOTOR_FAULT;
 		volatile boolean IMU_FAULT;
 	private:
@@ -116,7 +116,7 @@ class Motor{
 	public:
 		Motor();
 		~Motor();
-		Motor* attach(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint16_t maxSpeed = 32767);
+		Motor* attach(uint8_t motorTerminal, float maxCurrent = 20.0, uint8_t numPoles = 6, uint32_t maxSpeed = 32767);
 		uint16_t registerRead(uint16_t addr);
                 void registerWrite(uint16_t addr, uint16_t data);
                 boolean faultCheck();
