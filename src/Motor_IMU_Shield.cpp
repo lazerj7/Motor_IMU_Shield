@@ -147,10 +147,10 @@ Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, 
 		return nullptr;
 	}
 	registerWrite(A4963_CONF1, 0x001F);
-	registerWrite(A4963_CONF2, 0x0780);
-	registerWrite(A4963_CONF3, 0x0752);
-	registerWrite(A4963_CONF4, 0x075F);
-	registerWrite(A4963_CONF5, 0x0708);
+	registerWrite(A4963_CONF2, 0x0880);
+	registerWrite(A4963_CONF3, 0x0809);
+	registerWrite(A4963_CONF4, 0x0A0F);
+	registerWrite(A4963_CONF5, 0x0308);
 	registerWrite(A4963_RUN, 0x000A);
 	registerWrite(A4963_FAULT, 0x0000);
 
@@ -342,6 +342,7 @@ Motor::~Motor() {
  * Motor Fault Interrupt *
  *************************/
 void Motor::faultInterrupt() {
+	/*
 	//detachInterrupt(digitalPinToInterrupt(2));
 	*motorFaultPointer = true;
 	if (state.serial) {
@@ -424,6 +425,7 @@ void Motor::faultInterrupt() {
 	}
 	//noInterrupts();
 	//attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+*/
 }
 
 /********************************************************************************
@@ -518,9 +520,9 @@ IMU* IMU::attach () {
 	registerWrite(0x01, 0x10, 0x00);
 	registerWrite(0x01, 0x0F, 0x00);
 
-	//Set axis to defaults (again, just in case...)
-	registerWrite(0x00, 0x42, 0x00);
-	registerWrite(0x00, 0x41, 0x24);
+	//Set axes
+	registerWrite(0x00, 0x42, 0x02);
+	registerWrite(0x00, 0x41, 0x21);
 
 	return this;
 }
