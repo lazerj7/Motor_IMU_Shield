@@ -110,3 +110,10 @@ quaternionData	LITERAL1
 linearAcceleration	LITERAL1
 gravityVector	LITERAL1
 temperature	LITERAL1
+w	LITERAL1
+x	LITERAL1
+y	LITERAL1
+z	LITERAL1
+yaw	LITERAL1
+roll	LITERAL1
+pitch	LITERAL1

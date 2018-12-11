@@ -7,7 +7,7 @@
 
 #include "Motor_IMU_Shield.h"
 
-#define SPI_SETTINGS SPISettings(10000000,MSBFIRST,SPI_MODE3)
+#define SPI_SETTINGS SPISettings(1000000,MSBFIRST,SPI_MODE3)
 #define I2C_CLK 100000
 
 namespace {
@@ -29,7 +29,7 @@ uint8_t IMU::_addr = 0;
 /*********************
  * Initialize Shield *
  *********************/
-void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
+void Motor_IMU_Shield::begin(uint8_t imuAddr, long serial) {
 	state.spi = state.imu = state.motors = 0;
 	MOTOR_FAULT = false;
 	IMU_FAULT = false;
@@ -45,19 +45,20 @@ void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
 
 	SPI.begin();
 	for (int i = MOTOR_A; i <= MOTOR_D; i++) {
-		pinMode(i, OUTPUT);
-		digitalWrite(i, LOW);
-		SPI.beginTransaction(SPI_SETTINGS);
-		SPI.transfer16( (A4963_RUN << 13) | 0x1008 );
-		SPI.endTransaction();
 		digitalWrite(i, HIGH);
+		pinMode(i, OUTPUT);
+		SPI.beginTransaction(SPI_SETTINGS);
+		digitalWrite(i, LOW);
+		SPI.transfer16( (A4963_RUN << 13) | 0x1008 );
+		digitalWrite(i, HIGH);
+		SPI.endTransaction();
 	}
 	SPI.end();
 	if (imuAddr == NOT_JUMPERED) {
-		imuAddr = 0;
+		state.imuAddr = 0;
 	}
 	else if (imuAddr == JUMPERED) {
-		imuAddr = 1;
+		state.imuAddr = 1;
 	}
 	else {
 		badAddress();
@@ -68,7 +69,13 @@ void Motor_IMU_Shield::begin(uint8_t imuAddr, int serial) {
 	Wire.beginTransmission(imuAddr);
 	Wire.write(0x07);
 	Wire.write(0x00);
-	Wire.endTransmission(1);
+	if (Wire.endTransmission(1) != 0) {
+		delayMicroseconds(450);
+		Wire.beginTransmission(imuAddr);
+		Wire.write(0x07);
+		Wire.write(0x00);
+		Wire.endTransmission(1);
+	}
 	Wire.beginTransmission(imuAddr);
 	Wire.write(0x3E);
 	Wire.write(0x02);
@@ -86,14 +93,14 @@ Motor::Motor() {
 /****************
  * Attach Motor *
  ****************/
-Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint16_t maxSpeed) {
+Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, uint32_t maxSpeed) {
 	if (motorTerminal < MOTOR_A || motorTerminal > MOTOR_D) {
 		return nullptr;
 	}
 
 	if (!state.spi) {
 		SPI.usingInterrupt(digitalPinToInterrupt(2));
-		attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+		//attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
 		SPI.begin();
 		state.spi = 1;	
 	}
@@ -104,8 +111,8 @@ Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, 
 	uint16_t fault;
 
 	_cs = motorTerminal;
-	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH);
+	pinMode(_cs, OUTPUT);
 
 	/**********************
 	 * Set Default Config *
@@ -140,11 +147,11 @@ Motor* Motor::attach(uint8_t motorTerminal, float maxCurrent, uint8_t numPoles, 
 		return nullptr;
 	}
 	registerWrite(A4963_CONF1, 0x001F);
-	registerWrite(A4963_CONF2, 0x0780);
-	registerWrite(A4963_CONF3, 0x0752);
-	registerWrite(A4963_CONF4, 0x0773);
-	registerWrite(A4963_CONF5, 0x0708);
-	registerWrite(A4963_RUN, 0x0008);
+	registerWrite(A4963_CONF2, 0x0880);
+	registerWrite(A4963_CONF3, 0x0809);
+	registerWrite(A4963_CONF4, 0x0A0F);
+	registerWrite(A4963_CONF5, 0x0308);
+	registerWrite(A4963_RUN, 0x000A);
 	registerWrite(A4963_FAULT, 0x0000);
 
 
@@ -274,9 +281,14 @@ void Motor::setSpeed(uint8_t speed) {
  *******************/
 int Motor::getSpeed() {
 	uint16_t buffer;
+	uint8_t speed;
 
 	buffer = registerRead(A4963_RUN);
-	return (int) ( ( 3 * ( ( buffer & 0x01F0 ) >> 4 ) ) + 7 );
+	speed = ((int) ( ( 3* ( ( buffer & 0x01F0 ) >> 4 ) ) + 7 ));
+	if (speed <= 7) {
+		return 0;
+	}
+	return speed;
 }
 
 /***********************
@@ -330,15 +342,16 @@ Motor::~Motor() {
  * Motor Fault Interrupt *
  *************************/
 void Motor::faultInterrupt() {
-	detachInterrupt(digitalPinToInterrupt(2));
+	/*
+	//detachInterrupt(digitalPinToInterrupt(2));
 	*motorFaultPointer = true;
 	if (state.serial) {
 		uint16_t buffer;
 		uint16_t fault;
 		
-		interrupts();
+		//interrupts();
 
-		for (int i = MOTOR_A; i < MOTOR_D; i++) {
+		for (int i = MOTOR_A; i <= MOTOR_D; i++) {
 			buffer = A4963_FAULT << 13;
 			SPI.beginTransaction(SPI_SETTINGS);
 			digitalWrite(i, LOW);
@@ -346,7 +359,7 @@ void Motor::faultInterrupt() {
 			digitalWrite(i, HIGH);
 			SPI.endTransaction();
 
-			if (fault >> 15) {
+			if ((fault >> 15) != 0x0000) {
 				fault &= 0x6FFF;
 				char motorController[] = "Motor Controller   Error: ";
 				switch (i) {
@@ -364,8 +377,8 @@ void Motor::faultInterrupt() {
 						break;
 				}
 				for (int j = 14; j >= 0; j--) {
-					if (fault >> j) {
-						fault &= ~(0x4000 >> j);
+					if ((fault >> j) != 0x0000) {
+						fault &= (~(0x0001 << j));
 						Serial.print(motorController);
 						switch (j) {
 							case 14:
@@ -410,8 +423,9 @@ void Motor::faultInterrupt() {
 			}
 		}
 	}
-	noInterrupts();
-	attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+	//noInterrupts();
+	//attachInterrupt(digitalPinToInterrupt(2), Motor::faultInterrupt, FALLING);
+*/
 }
 
 /********************************************************************************
@@ -428,6 +442,10 @@ IMU::IMU() {}
  * Attach IMU *
  **************/
 IMU* IMU::attach () {
+	uint8_t selfTest;
+	uint16_t timeStart;
+	uint16_t time;
+
 	Wire.begin();
 	Wire.setClock(I2C_CLK);
 
@@ -439,26 +457,30 @@ IMU* IMU::attach () {
 		_addr = NOT_JUMPERED;
 	}
 
-	//get current register page
+	//See if IMU is there
 	Wire.beginTransmission(_addr);
 	Wire.write(0x07);
-	if (!Wire.endTransmission(0)) {
-		delay(50);
+	Wire.write(0x00);
+	if (Wire.endTransmission(1) != 0) {
+		delayMicroseconds(450);
 		Wire.beginTransmission(_addr);
 		Wire.write(0x07);
-		if(!Wire.endTransmission(0)) {
-			if (state.serial) {
-				Serial.println(F("Failed to Communicate with BNO055"));
-				Serial.println(F("All Further Attempted Interaction With BNO055 results in undefined behavior!!!!!!!!"));
-			}
-			return nullptr;
-		}
+		Wire.write(0x00);
+		Wire.endTransmission(1);
 	}
-	if (Wire.requestFrom((int) _addr, 1, 1)) {
-		_page = Wire.read();
+	Wire.beginTransmission(_addr);
+	Wire.write(0x00);
+	Wire.endTransmission(0);
+	Wire.requestFrom((int) _addr, 1, 1);
+	if (Wire.read() != 0xA0) {
+		if (state.serial) {
+			Serial.println(F("Failed to Communicate with BNO055"));
+			Serial.println(F("All Further Attempted Interaction With BNO055 results in undefined behavior!!!!!!!!!"));
+		}
+		return nullptr;
 	}
 	else {
-		IMU::_errorHandler();
+		_page = 0x00;
 	}
 
 	//Set Normal Power Mode
@@ -468,13 +490,27 @@ IMU* IMU::attach () {
 	registerWrite(0x00, 0x3D, CONFIG_MODE);
 
 	//self test
+	if (state.serial) {
+		Serial.println(F("Performing BNO055 Self Test. May Take Up to 5 Seconds. Please Wait...."));
+	}
 	registerWrite(0x00, 0x3F, 0x01);
-	delayMicroseconds(50);
-	if (registerRead(0x00, 0x36) != 0x0F) {
+	time = 0;
+	timeStart = millis();
+	while(registerRead(0x00, 0x36) != 0x0F && time < 5000) {
+		time = millis() - timeStart;
+		delay(100);
+	}
+	if ((selfTest = registerRead(0x00, 0x36)) != 0x0F) {
 		if (state.serial) {
-			Serial.println(F("BNO055 FAILED Self Test!!!!!"));
+			Serial.print(F("BNO055 FAILED Self Test With Error Code: "));
+			Serial.println(selfTest, HEX);
 		}
 		return nullptr;
+	}
+	else {
+		if (state.serial) {
+			Serial.println(F("BNO055 Self Test Passed"));
+		}
 	}
 
 	//set units to celsius for temp, degrees for angles, m/s^2 for acceleration
@@ -484,9 +520,9 @@ IMU* IMU::attach () {
 	registerWrite(0x01, 0x10, 0x00);
 	registerWrite(0x01, 0x0F, 0x00);
 
-	//Set axis to defaults (again, just in case...)
-	registerWrite(0x00, 0x42, 0x00);
-	registerWrite(0x00, 0x41, 0x24);
+	//Set axes
+	registerWrite(0x00, 0x42, 0x02);
+	registerWrite(0x00, 0x41, 0x21);
 
 	return this;
 }
@@ -500,7 +536,7 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 		Wire.beginTransmission(_addr);
 		Wire.write(0x07);
 		Wire.write((int) page);
-		if (!Wire.endTransmission(1)) {
+		if (Wire.endTransmission(1) != 0) {
 			IMU::_errorHandler();
 		}
 		else {
@@ -510,9 +546,10 @@ uint8_t IMU::registerRead(uint8_t page, uint8_t reg) {
 
 	Wire.beginTransmission(_addr);
 	Wire.write((int) reg);
-	if (!Wire.endTransmission(0)) {
+	if (Wire.endTransmission(0) != 0) {
 		IMU::_errorHandler();
 	}
+
 	if (Wire.requestFrom((int) _addr, 1, 1)) {
 	}
 	else {
@@ -529,7 +566,7 @@ void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
                 Wire.beginTransmission(_addr);
                 Wire.write(0x07);
                 Wire.write((int) page);
-               if (!Wire.endTransmission(1)) {
+               if (Wire.endTransmission(1) != 0) {
 		       IMU::_errorHandler();
 	       }
 	       else {
@@ -540,7 +577,7 @@ void IMU::registerWrite(uint8_t page, uint8_t reg, uint8_t value) {
 	Wire.beginTransmission(_addr);
 	Wire.write((int) reg);
 	Wire.write((int) value);
-	if (!Wire.endTransmission(1)) {
+	if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 }
@@ -624,9 +661,11 @@ boolean IMU::calibrate() {
 		Serial.println(F("Magnetometer Calibrated!"));
 	}
 
-	status = registerRead(0x00, 0x35) >> 6;
+	delay(500);
 
-	if (status == 3) {
+	status = registerRead(0x00, 0x35) <<2;
+
+	if (status == 0xFC) {
 		if (state.serial) {
 			Serial.println(F("IMU Calibrated!"));
 		}
@@ -646,10 +685,11 @@ boolean IMU::calibrate() {
  * IMU Save Calibration To EEPROM *
  **********************************/
 void IMU::saveCalibration() {
+	calibrationData calibration;
 	Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x01);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
                 IMU::_errorHandler();
         }
         else {
@@ -657,19 +697,22 @@ void IMU::saveCalibration() {
         }
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
                 IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
 		uint8_t id[16];
-		for (int i = 16; i >= 0; i--) {
+		for (int i = 15; i >= 0; i--) {
 			id[i] = Wire.read();
 		}
 		if (state.serial) {
 			Serial.println(F("Saving calibration information to EEPROM. Please Wait."));
 		}
-		EEPROM.put(0, id);
-		EEPROM.put(sizeof(id), getCalibration());
+		for (int i = 0; i < 16; i++) {
+			EEPROM.write((i * sizeof(uint8_t)), id[i]);
+		}
+		calibration = getCalibration();
+		EEPROM.put((16 * sizeof(uint8_t)), calibration);
 		if (state.serial) {
 			Serial.println(F("Calibration Data Saved to EEPROM."));
 		}
@@ -701,14 +744,16 @@ boolean IMU::restoreCalibration() {
 	uint8_t mode;
 	uint8_t id[16];
 	
-	mode = registerRead(0x00, 0x1C);
-	registerWrite(0x00, 0x1C, CONFIG_MODE); 
+	mode = registerRead(0x00, 0x3D);
+	registerWrite(0x00, 0x3D, CONFIG_MODE); 
 
-	EEPROM.get(0, id);
+	for(int i = 0; i < 16; i ++) {
+		id[i] = EEPROM.read((i * sizeof(uint8_t)));
+	}
 	Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x01);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
                 IMU::_errorHandler();
         }
         else {
@@ -716,11 +761,11 @@ boolean IMU::restoreCalibration() {
         }
         Wire.beginTransmission(_addr);
         Wire.write(0x50);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
                 IMU::_errorHandler();
         }
         if (Wire.requestFrom((int) _addr, 16, 1)) {
-        	for (int i = 16; i >= 0; i--) {
+        	for (int i = 15; i >= 0; i--) {
                 	if (id[i] != Wire.read()) {
 				return false;
 			}
@@ -736,11 +781,11 @@ boolean IMU::restoreCalibration() {
 	uint16_t* cal = (uint16_t*) &calibration;
 	uint8_t startAddr = 0x6A;
 
-	EEPROM.get(sizeof(id), calibration);
+	EEPROM.get((16 * sizeof(uint8_t)), calibration);
 	Wire.beginTransmission(_addr);
 	Wire.write(0x07);
 	Wire.write(0x00);
-	if (!Wire.endTransmission(1)) {
+	if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 	else {
@@ -752,17 +797,17 @@ boolean IMU::restoreCalibration() {
 		Wire.beginTransmission(_addr);
 		Wire.write(startAddr--);
 		Wire.write(msb);
-		if (!Wire.endTransmission(1)) {
+		if (Wire.endTransmission(1) != 0) {
 			IMU::_errorHandler();
 		}
 		Wire.beginTransmission(_addr);
 		Wire.write(startAddr--);
 		Wire.write(lsb);
-		if (!Wire.endTransmission(1)) {
+		if (Wire.endTransmission(1) != 0) {
 			IMU::_errorHandler();
 		}
 	}
-	registerWrite(0x00, 0x1C, mode);
+	registerWrite(0x00, 0x3D, mode);
 	return true;
 }
 
@@ -779,7 +824,7 @@ IMU::calibrationData IMU::getCalibration() {
         Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x00);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 	else {
@@ -787,7 +832,7 @@ IMU::calibrationData IMU::getCalibration() {
 	}
 	Wire.beginTransmission(_addr);
         Wire.write(0x55);
-        if (!Wire.endTransmission(0)) {
+        if (Wire.endTransmission(0) != 0) {
 		IMU::_errorHandler();
 	}
         if (Wire.requestFrom((int) _addr, 22, 0)) {
@@ -846,12 +891,13 @@ uint16_t IMU::status() {
  *****************************/
 void IMU::dat::update(uint8_t dataType) {
 	uint8_t lsb;
-        uint16_t msb;
+        uint8_t msb;
+	int16_t buffer;
 	
         Wire.beginTransmission(_addr);
         Wire.write(0x07);
         Wire.write(0x00);
-        if (!Wire.endTransmission(1)) {
+        if (Wire.endTransmission(1) != 0) {
 		IMU::_errorHandler();
 	}
 	else {
@@ -863,14 +909,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case ACCELEROMETER:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x08);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(accelerometer.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(accelerometer.x) ) + i) = ((double) buffer)/ 100.0;
 				}
 			}
 			else {
@@ -880,14 +927,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case MAGNETOMETER:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x0E);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(magnetometer.x) ) + i) = ((double) (msb | lsb))/ 16.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(magnetometer.x) ) + i) = ((double) buffer)/ 16.0;
 				}
 			}
 			else {
@@ -897,14 +945,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case GYROSCOPE:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x14);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(gyroscope.x) ) + i) = ((double) (msb | lsb))/ 16.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(gyroscope.x) ) + i) = ((double) buffer)/ 16.0;
 				}
 			}
 			else {
@@ -914,14 +963,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case EULER_ANGLES:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x1A);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(eulerData.yaw) ) + i) = ((double) (msb | lsb))/ 16.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(eulerData.yaw) ) + i) = ((double) buffer)/ 16.0;
 				}
 			}
 			else {
@@ -931,14 +981,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case QUATERNION:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x20);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(quaternionData.w) ) + i) = ((double) (msb | lsb))/ 16384.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(quaternionData.w) ) + i) = ((double) buffer)/ 16384.0;
 				}
 			}
 			else {
@@ -948,14 +999,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case LINEAR_ACCELERATION:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x28);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(linearAcceleration.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(linearAcceleration.x) ) + i) = ((double) buffer)/ 100.0;
 				}
 			}
 			else {
@@ -965,14 +1017,15 @@ void IMU::dat::update(uint8_t dataType) {
 		case GRAVITY_VECTOR:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x2E);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 6, 0)) {
 				for (int i = 0; i < 3; i++) {
 					lsb = Wire.read();
-					msb = (Wire.read()) << 8;
-					*( ( (double*) &(gravityVector.x) ) + i) = ((double) (msb | lsb))/ 100.0;
+					msb = Wire.read();
+					buffer = ((int16_t) lsb) | (((int16_t) msb) << 8);
+					*( ( (double*) &(gravityVector.x) ) + i) = ((double) buffer)/ 100.0;
 				}
 			}
 			else {
@@ -982,11 +1035,12 @@ void IMU::dat::update(uint8_t dataType) {
 		case TEMPERATURE:
 			Wire.beginTransmission(_addr);
 			Wire.write(0x34);
-			if (!Wire.endTransmission(0)) {
+			if (Wire.endTransmission(0) != 0) {
 				IMU::_errorHandler();
 			}
 			if (Wire.requestFrom((int) _addr, 1, 0)) {
-				temperature = Wire.read();
+				buffer = (int16_t) Wire.read();
+				temperature = (double) buffer;
 			}
 			else {
 				IMU::_errorHandler();
