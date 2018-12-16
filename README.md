@@ -99,60 +99,101 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
 
 ### Library Functions
 
+  * ```cpp
+    <shield>.begin(int imu_address, long serial_baud_rate);
+    ```
+    Initializes Motor/IMU Shield. <shield> is the name of a Motor_IMU_Shield instance. See [Library Variables](#library-variables) for information on Motor_IMU_Shield instances.
+      * Arguments
+        * ```cpp
+          int imu_address
+          ```
+          The address of the BNO055 IMU. Determined by the address jumper on the board. Can be given using one of the pre-defined constants:
+            * JUMPERED
+            * NOT_JUMPERED
+            * CLOSED
+            * OPEN
+        * ```cpp
+          long serial_baud_rate
+          ```
+          The baud rate for USB serial communication. Set this to 0 to disable serial communication.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <motor>.attach(int motorTerminal, [float maxCurrent], [int numPoles], [long maxSpeed])
+    ```
+    Attaches a motor instance to a motor terminal on the shield. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
 
-```cpp
-Motor motorName(int motorTerminal, [float maxCurrent], [int numPoles], [int maxSpeed])
-```
+      * Arguments
+        * ```cpp
+          int motorTerminal
+          ```
+          The only required argument and can be MOTOR_A, MOTOR_B, MOTOR_C, or MOTOR_D corresponding to which terminal the motor is plugged into on the shield.
 
-Create a Motor object called motorName.
+        * ```cpp
+          float maxCurrent
+          ```
+          An optional floating point value to specify the max current of the motor in amps. Defaults to maximum value of 20 amps if ommitted, any value greater than 20 amps defaults to 20 amps, and any value less than 2.5 amps defaults to 2.5 amps.
+        * ```cpp
+          int numPoles
+          ```
+          An optional integer value giving the number of pole pairs in the motor. This is only necessary for calculating a value for the maximum speed of the motor and is only relevent in Closed Loop Speed Mode.
+        * ```cpp
+          long maxSpeed
+          ```
+          An optional long value representing the maximum speed of the motor in RPM. It is only relevent in Closed Loop Speed Mode.
+<br/>
+<br/>
 
-motorTerminal is the only required argument and can be MOTOR_A, MOTOR_B, MOTOR_C, or MOTOR_D corresponding to which terminal the motor is plugged into on the shield.
-
-maxCurrent is an optional floating point value to specify the max current of the motor in amps. Defaults to maximum value of 20 amps if ommitted, any value greater than 20 amps defaults to 20 amps, and any value less than 2.5 amps defaults to 2.5 amps.
-
-numPoles is an optional integer value giving the number of pole pairs in the motor. This is only necessary for calculating a value for the maximum speed of the motor and is only relevent in Closed Loop Speed Mode.
-
-maxSpeed is an optional integer value representing the maximum speed of the motor in RPM. It is only relevent in Closed Loop Speed Mode.
-
-```cpp
-motorName.setMode(int controlMode)
-```
-
-Sets Operating Mode For The Motor.
-
-Returns a boolean true if successful or false if an error occurred.
-
-Takes an argument of INDIRECT_SPEED (default value), DIRECT_SPEED, CLOSED_LOOP_CURRENT, or CLOSED_LOOP_SPEED corresponding to the desired operating mode.
-
-
-```cpp
-motorName.setDirection(int dir)
-```
-
-Sets Rotation Direction for the motor.
-
-Returns a boolean true if successful or false if an error occurred.
-
-Takes an argument of FORWARD or REVERSE.
-
-```cpp
-motorName.setSpeed(int speed)
-```
-
-Sets the Rotational speed of the motor. In non-closed-loop modes corresponds to PWM duty cycle. In closed loop modes corresponds to a percent of max speed or max current. Also disables motor brake and sets motor to run.
-
-Returns a boolean true if successful or false if an error occurred.
-
-Takes an integer corresponding to either PWM duty cylce (in percent) or percent of max speed or max current.
-
-```cpp
-motorName.getSpeed()
-```
-
-Returns an integer representing the current speed setting of the motor.
-
-Does not take an argument.
-
+  * ```cpp
+    <motor>.setMode(int controlMode)
+    ```
+    Sets the operating mode for a motor instance. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    * Arguments
+      * ```cpp
+        int controlMode
+        ```
+        Specifies the conrol mode to set. Given using one of the predefined constants:
+          * INDIRECT_SPEED (default value)
+          * DIRECT_SPEED
+          * CLOSED_LOOP_CURRENT
+          * CLOSED_LOOP_SPEED
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <motor>.setDirection(int dir)
+    ```
+    Sets Rotation Direction for the motor. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    * Arguments
+      * ```cpp
+        int dir
+        ```
+        An integer representing the direction of rotation. Can be given by either of the constanst FORWARD or REVERSE.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <motor>.setSpeed(int speed)
+    ```
+    Sets the Rotational speed of a motor instance. In non-closed-loop modes corresponds to PWM duty cycle. In closed loop modes corresponds to a percent of max speed or max current. Also disables motor brake and sets motor to run. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    * Arguments
+      * ```cpp
+        int speed
+        ```
+        An integer corresponding to either PWM duty cylce (in percent) or percent of max speed or max current.
+   <br/>
+   <br/>
+    
+  * ```cpp
+    <motor>.getSpeed()
+    ```
+    Gets the current speed setting of a motor instance. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    * Returns
+      An int representing either the PWM duty cycle or percent of max speed or max current. (depends on operating mode)
+  <br/>
+  <br/>
+  
 ```cpp
 motorName.coast()
 ```
