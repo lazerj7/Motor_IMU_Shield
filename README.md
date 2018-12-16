@@ -1,10 +1,99 @@
-# THIS IS AN ALPHA RELEASE
-
-# THIS README IS INCORRECT AND NEEDS TO BE UPDATED
-
 # Motor_IMU_Shield
 
-This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno (Should be Widely Compatibile with other Arduinos i.e. Mega) which provides 4 Brushless DC Motor Drivers and an integrated Inertial Measurement Unit (IMU). The Motor Controllers are Allegro MicroSystems A4963's and the IMU is a Bosch Sensortec BNO055. The PCB directory contains a PDF Schematic for the Shield as well as a KiCad Project for the Shield and the Gerber files for the Shield.
+This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno (Should be Widely Compatibile with other Arduinos i.e. Mega) which provides 4 Brushless DC Motor Drivers and an integrated Inertial Measurement Unit (IMU). The Motor Controllers are Allegro MicroSystems A4963's and the IMU is a Bosch Sensortec BNO055. PCB files are available at [https://github.com/lazerj7/Motor_IMU_Shield_PCB](https://github.com/lazerj7/Motor_IMU_Shield_PCB).
+
+## Contents
+
+1. [Installing The Library](#installing-the-library)
+   * [Linux](#linux)
+     * [Command Line](#command-line)
+     * [Download Zip](#download-zip)
+   * [Mac](#mac)
+   * [Windows](#windows)
+1. [Using The Library](#using-the-library)
+   * [Library Functions](#library-functions)
+   * [Library Variables](#library-variables)
+
+## Installing The Library
+
+### Linux
+
+#### Command Line
+
+1. Locate your Sketchbook Directory and the libraries Directory Inside
+   * Usually your sketchbook is located in your home directory and called either Arduino or Sketchbook.
+  
+   * To find you sketchbook open the Arduino IDE, click File, then Preferences. On the Settings tab you should see your Sketchbook location.
+  
+   * Your sketchbook directory should have a libraries Directory inside. If not, make one. Note the path to the libraries Directory, i.e.:
+     ```
+     ~/Arduino/libraries
+     ```
+     or
+     ```
+     /home/<user name>/Arduino/libraries
+     ```
+  
+1. Navigate to you libraries directory in a terminal. i.e.:
+
+   ```
+   cd ~/Arduino/libraries
+   ```
+
+1. Clone the repository:
+
+   ```
+   git clone https://github.com/lazerj7/Motor_IMU_Shield
+   ```
+
+1. That's it! You should now have a directory callled Motor_IMU_Shield in your libraries directory with all the library files inside.
+
+#### Download Zip
+
+1. Locate your Sketchbook Directory and the libraries Directory Inside
+   * Usually your sketchbook is located in your home directory and called either Arduino or Sketchbook.
+  
+   * To find you sketchbook open the Arduino IDE, click File, then Preferences. On the Settings tab you should see your Sketchbook location.
+  
+   * Your sketchbook directory should have a libraries Directory inside. If not, make one. Note the path to the libraries Directory.
+  
+1. In the upper right of the repository screen on GitHub, click 'Clone or Download', and then click 'Download ZIP'
+
+1. Extract the .zip file into your libraries Directory.
+
+1. Done!
+
+### Mac
+
+1. Locate your Sketchbook Directory and the libraries Directory Inside
+
+   * Usually your sketchbook is located in your Documents directory and called Arduino. It should have a libraries Directory inside. If not, make one.
+
+   * To find you sketchbook open the Arduino IDE, click File, then Preferences. On the Settings tab you should see your Sketchbook location.
+  
+   * Your sketchbook directory should have a libraries Directory inside. If not, make one. Note the path to the libraries Directory.
+  
+1. In the upper right of the repository screen on GitHub, click 'Clone or Download', and then click 'Download ZIP'
+
+1. Extract the .zip file into your libraries Directory.
+
+1. Done!
+
+### Windows
+
+1. Locate your Sketchbook Directory and the libraries Directory Inside
+
+   * Usually your sketchbook is located in your Documents directory and called Arduino. It should have a libraries Directory inside. If not, make one.
+
+   * To find you sketchbook open the Arduino IDE, click File, then Preferences. On the Settings tab you should see your Sketchbook location.
+  
+   * Your sketchbook directory should have a libraries Directory inside. If not, make one. Note the path to the libraries Directory.
+  
+1. In the upper right of the repository screen on GitHub, click 'Clone or Download', and then click 'Download ZIP'
+
+1. Extract the .zip file into your libraries Directory.
+
+1. Done!
 
 ## Using The Library
 
