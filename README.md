@@ -102,7 +102,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <shield>.begin(int imu_address, long serial_baud_rate);
     ```
-    Initializes Motor/IMU Shield. <shield> is the name of a Motor_IMU_Shield instance. See [Library Variables](#library-variables) for information on Motor_IMU_Shield instances.
+    Initializes Motor/IMU Shield. `<shield>` is the name of a Motor_IMU_Shield instance. See [Library Variables](#library-variables) for information on Motor_IMU_Shield instances.
       * Arguments
         * ```cpp
           int imu_address
@@ -122,7 +122,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.attach(int motorTerminal, [float maxCurrent], [int numPoles], [long maxSpeed])
     ```
-    Attaches a motor instance to a motor terminal on the shield. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Attaches a motor instance to a motor terminal on the shield. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
 
       * Arguments
         * ```cpp
@@ -148,7 +148,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.setMode(int controlMode)
     ```
-    Sets the operating mode for a motor instance. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Sets the operating mode for a motor instance. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
     * Arguments
       * ```cpp
         int controlMode
@@ -164,7 +164,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.setDirection(int dir)
     ```
-    Sets Rotation Direction for the motor. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Sets Rotation Direction for the motor. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
     * Arguments
       * ```cpp
         int dir
@@ -176,7 +176,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.setSpeed(int speed)
     ```
-    Sets the Rotational speed of a motor instance. In non-closed-loop modes corresponds to PWM duty cycle. In closed loop modes corresponds to a percent of max speed or max current. Also disables motor brake and sets motor to run. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Sets the Rotational speed of a motor instance. In non-closed-loop modes corresponds to PWM duty cycle. In closed loop modes corresponds to a percent of max speed or max current. Also disables motor brake and sets motor to run. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
     * Arguments
       * ```cpp
         int speed
@@ -188,7 +188,7 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.getSpeed()
     ```
-    Gets the current speed setting of a motor instance. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Gets the current speed setting of a motor instance. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
     * Returns: an integer representing either the PWM duty cycle or percent of max speed or max current. (depends on operating mode)
   <br/>
   <br/>
@@ -196,22 +196,22 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
   * ```cpp
     <motor>.coast()
     ```
-    Disables motor outputs and coasts motor.<motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
-NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart() or with a different speed using <motor>.setSpeed(int speed).
+    Disables motor outputs and coasts motor. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+NOTE: Motor can be resumed at previous speed setting by calling `<motor>.restart()` or with a different speed using `<motor>.setSpeed(int speed)`.
   <br/>
   <br/>
   
   * ```cpp
     <motor>.restart()
     ```
-    Restarts motor at previous speed setting following <motor>.coast(). <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Restarts motor at previous speed setting following `<motor>.coast()`. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
   <br/>
   <br/>
 
   * ```cpp
     <motor>.faultCheck();
     ```
-    Checks for motor controller faults. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+    Checks for motor controller faults. `<motor>` is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
       * Returns: a boolean true if a motor fault has been detected or false if no motor faults detected.
   <br/>
   <br/>
@@ -219,14 +219,14 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.attach()
     ```
-    Initializes BNO055 IMU. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    Initializes BNO055 IMU. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
   <br/>
   <br/>
   
   * ```cpp
     <imu>.calibrate()
     ```
-    Performs IMU calibration. It is highly suggested that you have serial communication enabled if performing calibration, as the calibration routine prints instructions and status information over serial.
+    Performs IMU calibration. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances. It is highly suggested that you have serial communication enabled if performing calibration, as the calibration routine prints instructions and status information over serial.
       * Returns
           A boolean true if calibration was successful or false if calibration failed.
   <br/>
@@ -235,7 +235,7 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.saveCalibration()
     ```
-    Saves calibration data to EEPROM. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances. 
+    Saves calibration data to EEPROM. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances. 
     NOTE: EEPROM has a limited number of writes so this should not be done frequently.
   <br/>
   <br/>
@@ -243,7 +243,7 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.eepromClear()
     ```
-    Clears EEPROM by writing 0's. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    Clears EEPROM by writing 0's. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
     NOTE: EEPROM has a limited number of writes so this should not be done frequently.
   <br/>
   <br/>
@@ -251,7 +251,7 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.restoreCalibration()
     ```
-    Restores calibration settings previously stored in EEPROM. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    Restores calibration settings previously stored in EEPROM. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
       * Returns: a boolean true if successful in restoring calibration, or false if failed to restore calibration.
   <br/>
   <br/>
@@ -259,7 +259,7 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.setMode(int mode)
     ```
-    Sets operating mode for BNO055 IMU. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    Sets operating mode for BNO055 IMU. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
       * Arguments
         * ```cpp
           int mode
@@ -284,7 +284,7 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
   * ```cpp
     <imu>.data.update(int dataType)
     ```
-    Updates IMU data. Will only store one type of data at a time. If you want multiple types of data store data in a seperate variable in between calls to update(). Updated data is stored in <imu>.data.<dataType>, see [Library Variables](#library-variables) for more info. Referring to a different data type than the most recent updata data type is undefined. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    Updates IMU data. Will only store one type of data at a time. If you want multiple types of data store data in a seperate variable in between calls to `update()`. Updated data is stored in `<imu>.data.<dataType>`, see [Library Variables](#library-variables) for more info. Referring to a different data type than the most recent updata data type is undefined. `<imu>` is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
       * Arguments
         * ```cpp
           int dataType
@@ -300,4 +300,86 @@ NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart(
             * TEMPERATURE
   <br/>
   <br/>
+  
 ### Library Variables
+
+  * ```cpp
+    Motor_IMU_Shield shieldName;
+    ```
+    A variable representing an instance of the shield. Must be initialized with `shieldName.begin(int imu_address, long serial_baud_rate)` before using. Should also be initialized before initializing IMU or Motor instances.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    Motor motorName;
+    ```
+    A variable representing a motor instance. Must be attached to a motor terminal using `motorName.attach(int motorTerminal, [float maxCurrent], [int numPoles], [long maxSpeed])` before using.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    IMU imuName;
+    ```
+    A variable representing an IMU instance. Must be initialized using `imuName.attach()` before using.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    imuName.data.<dataType>
+    ```
+    IMU data. Must call `imuName.data.update(int dataType)` before accessing. Only the data type corresponding to what was specified with `imuName.data.update(int dataType)` is valid:
+      * ```cpp
+        imuName.data.update(ACCELEROMETER);
+        ```
+          * Valid Data is:
+            ```cpp
+            vector imuName.data.accelerometer;
+            ```
+      * ```cpp
+        imuName.data.update(MAGNETOMETER);
+        ```
+          * Valid Data is:
+            ```cpp
+            vector imuName.data.magnetometer;
+            ```
+      * ```cpp
+        imuName.data.update(GYROSCOPE);
+        ```
+          * Valid Data is:
+            ```cpp
+            vector imuName.data.gyroscope;
+            ```
+      * ```cpp
+        imuName.data.update(EULER_ANGLES);
+        ```
+          * Valid Data is:
+            ```cpp
+            euler imuName.data.eulerData;
+      * ```cpp
+        imuName.data.update(QUATERNION);
+        ```
+          * Valid Data is:
+            ```cpp
+            quaternion imuName.data.quaternionData;
+            ```
+      * ```cpp
+        imuName.data.update(LINEAR_ACCELERATION);
+        ```
+          * Valid Data is:
+            ```cpp
+            vector imuName.data.linearAcceleration;
+            ```
+      * ```cpp
+        imuName.data.update(GRAVITY_VECTOR);
+        ```
+          * Valid Data is:
+            ```cpp
+            vector imuName.data.gravityVector;
+            ```
+      * ```cpp
+        imuName.data.update(TEMPERATURE);
+        ```
+          * Valid Data is:
+            ```cpp
+            double imuName.data.temperature;
+            ```
