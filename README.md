@@ -431,7 +431,7 @@ NOTE: Motor can be resumed at previous speed setting by calling `<motor>.restart
       * ```cpp
         double quaternionName.y;
         ```
-      * ``cpp
+      * ```cpp
         double quaternionName.z;
         ```
         
