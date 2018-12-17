@@ -383,3 +383,55 @@ NOTE: Motor can be resumed at previous speed setting by calling `<motor>.restart
             ```cpp
             double imuName.data.temperature;
             ```
+  <br/>
+  <br/>
+  
+  * ```cpp
+    vector vectorName;
+    ```
+    A vector struct containing:
+      * ```cpp
+        double vectorName.x;
+        ```
+      * ```cpp
+        double vectorName.y;
+        ```
+      * ```cpp
+        double vectorName.z;
+        ```
+  <br/>
+  <br/>
+  
+  * ```cpp
+    euler eulerName;
+    ```
+    A struct of euler angles containing:
+      * ```cpp
+        double yaw;
+        ```
+      * ```cpp
+        double roll;
+        ```
+      * ```cpp
+        double pitch;
+        ```
+  <br/>
+  <br/>
+  
+  * ```cpp
+    quaternion quaternionName;
+    ```
+    A quaternion struct containing:
+      * ```cpp
+        double quaternionName.w;
+        ```
+      * ```cpp
+        double quaternionName.x;
+        ```
+      * ```cpp
+        double quaternionName.y;
+        ```
+      * ``cpp
+        double quaternionName.z;
+        ```
+        
