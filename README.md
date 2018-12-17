@@ -189,65 +189,115 @@ This is an Arduino library for an Arduino "Shield" designed for the Arduino Uno 
     <motor>.getSpeed()
     ```
     Gets the current speed setting of a motor instance. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
-    * Returns
-      An int representing either the PWM duty cycle or percent of max speed or max current. (depends on operating mode)
+    * Returns: an integer representing either the PWM duty cycle or percent of max speed or max current. (depends on operating mode)
   <br/>
   <br/>
   
-```cpp
-motorName.coast()
-```
+  * ```cpp
+    <motor>.coast()
+    ```
+    Disables motor outputs and coasts motor.<motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+NOTE: Motor can be resumed at previous speed setting by calling <motor>.restart() or with a different speed using <motor>.setSpeed(int speed).
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <motor>.restart()
+    ```
+    Restarts motor at previous speed setting following <motor>.coast(). <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+  <br/>
+  <br/>
 
-Disables motor outputs and coasts motor.
-
-Returns boolean true if successful or false is an error occurred.
-
-Does not take an argument.
-
-NOTE: Motor can be resumed at previous speed setting by calling motorName.restart() or with a different speed using motorName.setSpeed(int speed).
-
-```cpp
-motorName.restart()
-```
-
-Restarts motor at previous speed setting following motorName.coast().
-
-Returns boolean true if successful or false if an error occurred.
-
-Does not take an argument.
-
-```cpp
-motorName.faultCheck();
-```
-
-Returns boolean true if a motor fault has been detected or false if no motor faults detected.
-
-Does not take an argument.
-
-### Advanced Library Functions
-
-NOTE: No error checking is performed in these functions. It is recommended that you call motorName.faultCheck() after a registerRead or registerWrite and implement some form of error handling.
-
-```cpp
-motorName.registerRead(int addr)
-```
-
-Read from one of the A4963 motor controller registers.
-
-Returns the register value as an int.
-
-Registers are defined as A4963_CONF0, A4963_CONF1, A4963_CONF2, A4963_CONF3, A4963_CONF4, A4963_CONF5, A4963_FAULT, and A4963_RUN.
-
-See A4963 datasheet for more detail on registers.
-
-```cpp
-motorName.registerWrite(int addr, int data)
-```
-
-Write to one of the A4963 motor controller registers.
-
-No return value.
-
-Register addresses defined as in registerRead, data is the data to be written to the register.
-
-See A4963 datasheet for more detail on registers.
+  * ```cpp
+    <motor>.faultCheck();
+    ```
+    Checks for motor controller faults. <motor> is the name of a motor instance. See [Library Variables](#library-variables) for information on motor instances.
+      * Returns: a boolean true if a motor fault has been detected or false if no motor faults detected.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.attach()
+    ```
+    Initializes BNO055 IMU. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.calibrate()
+    ```
+    Performs IMU calibration. It is highly suggested that you have serial communication enabled if performing calibration, as the calibration routine prints instructions and status information over serial.
+      * Returns
+          A boolean true if calibration was successful or false if calibration failed.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.saveCalibration()
+    ```
+    Saves calibration data to EEPROM. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances. 
+    NOTE: EEPROM has a limited number of writes so this should not be done frequently.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.eepromClear()
+    ```
+    Clears EEPROM by writing 0's. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+    NOTE: EEPROM has a limited number of writes so this should not be done frequently.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.restoreCalibration()
+    ```
+    Restores calibration settings previously stored in EEPROM. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+      * Returns: a boolean true if successful in restoring calibration, or false if failed to restore calibration.
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.setMode(int mode)
+    ```
+    Sets operating mode for BNO055 IMU. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+      * Arguments
+        * ```cpp
+          int mode
+          ```
+          The desired operating mode. Given by one of the following predefined constants:
+            * CONFIG_MODE
+            * ACC_ONLY_MODE
+            * MAG_ONLY_MODE
+            * GYRO_ONLY_MODE
+            * ACC_MAG_MODE
+            * ACC_GYRO_MODE
+            * MAG_GYRO_MODE
+            * AMG_MODE
+            * IMU_MODE
+            * COMPASS_MODE
+            * M4G_MODE
+            * NDOF_FMC_OFF_MODE
+            * NDOF_MODE
+  <br/>
+  <br/>
+  
+  * ```cpp
+    <imu>.data.update(int dataType)
+    ```
+    Updates IMU data. Will only store one type of data at a time. If you want multiple types of data store data in a seperate variable in between calls to update(). Updated data is stored in <imu>.data.<dataType>, see [Library Variables](#library-variables) for more info. Referring to a different data type than the most recent updata data type is undefined. <imu> is the name of the IMU instance. See [Library Variables](#library-variables) for information on IMU instances.
+      * Arguments
+        * ```cpp
+          int dataType
+          ```
+          The dataType to update. Given by one of the following predefined constants:
+            * ACCELEROMETER
+            * MAGNETOMETER
+            * GYROSCOPE
+            * EULER_ANGLES
+            * QUATERNION
+            * LINEAR_ACCELERATION
+            * GRAVITY_VECTOR
+            * TEMPERATURE
+  <br/>
+  <br/>
+### Library Variables
